@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Animated, PanResponder,
-  TouchableOpacity, Dimensions, SafeAreaView, StatusBar, Platform
+  TouchableOpacity, Dimensions, SafeAreaView, StatusBar, Platform, Image
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { calcRating, ratingColor, avatarColor, initials } from '../lib/utils';
@@ -43,9 +43,13 @@ function PlayerCard({ profile, style }) {
           <Text style={styles.cardFlag}>🇹🇷</Text>
         </View>
 
-        {/* Ortada büyük initials dairesi */}
+        {/* Ortada büyük avatar */}
         <View style={styles.bigCircle}>
-          <Text style={styles.bigInitials}>{initials(profile.full_name)}</Text>
+          {profile.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.bigAvatarImg} />
+          ) : (
+            <Text style={styles.bigInitials}>{initials(profile.full_name)}</Text>
+          )}
         </View>
 
         {/* Parlaklık efekti */}
@@ -293,8 +297,9 @@ const styles = StyleSheet.create({
   cardFlag:    { fontSize: 18, textAlign: 'center', marginTop: 4 },
   cardShine:   { position: 'absolute', top: 0, right: 0, width: 120, height: 120, borderBottomLeftRadius: 120, backgroundColor: 'rgba(255,255,255,0.07)' },
 
-  bigCircle:   { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)', justifyContent: 'center', alignItems: 'center' },
-  bigInitials: { color: '#fff', fontSize: 54, fontWeight: '900' },
+  bigCircle:    { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  bigInitials:  { color: '#fff', fontSize: 54, fontWeight: '900' },
+  bigAvatarImg: { width: 140, height: 140, borderRadius: 70 },
 
   // Alt beyaz panel
   cardBottom: { backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20 },

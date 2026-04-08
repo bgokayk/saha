@@ -22,6 +22,9 @@ import ChatScreen from './screens/ChatScreen';
 import MarketScreen from './screens/MarketScreen';
 import MatchRatingScreen from './screens/MatchRatingScreen';
 import VenueDetailScreen from './screens/VenueDetailScreen';
+import MatchDetailScreen from './screens/MatchDetailScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
+import { NotificationProvider } from './context/NotificationContext';
 
 const Stack = createNativeStackNavigator();
 
@@ -55,6 +58,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
     <CartProvider>
+    <NotificationProvider>
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}
@@ -75,6 +79,8 @@ export default function App() {
             <Stack.Screen name="Market" component={MarketScreen} />
             <Stack.Screen name="MatchRating" component={MatchRatingScreen} options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="MatchDetail" component={MatchDetailScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (
           // --- Giriş yapılmamış: Auth akışı ---
@@ -86,6 +92,7 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    </NotificationProvider>
     </CartProvider>
     </SafeAreaProvider>
   );

@@ -1,7 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Animated, Alert, Modal, TextInput, Platform
+  ActivityIndicator, Animated, Alert, Modal, TextInput, Platform, Image
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
@@ -49,7 +50,8 @@ export default function ProfileScreen({ navigation, route }) {
   const [editName, setEditName]   = useState('');
   const [editPos, setEditPos]     = useState('');
   const [editPhone, setEditPhone] = useState('');
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Animasyonlar
   const xpAnim    = useRef(new Animated.Value(0)).current;
@@ -169,6 +171,55 @@ export default function ProfileScreen({ navigation, route }) {
     ]);
   }
 
+  async function handlePickPhoto() {
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('İzin Gerekli', 'Fotoğraf seçmek için galeri iznine ihtiyaç var.');
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    setUploadingPhoto(true);
+    try {
+      const asset = result.assets[0];
+      const ext   = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${profile.id}.${ext}`;
+
+      let uploadData;
+      if (Platform.OS === 'web') {
+        const res = await fetch(asset.uri);
+        uploadData = await res.blob();
+      } else {
+        const res = await fetch(asset.uri);
+        uploadData = await res.blob();
+      }
+
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, uploadData, { upsert: true, contentType: `image/${ext}` });
+
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      const publicUrl = urlData.publicUrl + `?t=${Date.now()}`;
+
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', profile.id);
+      setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
+      Alert.alert('Başarılı', 'Profil fotoğrafın güncellendi!');
+    } catch (e) {
+      Alert.alert('Hata', e.message || 'Yükleme başarısız. Supabase Storage "avatars" bucket\'ını kontrol et.');
+    }
+    setUploadingPhoto(false);
+  }
+
   function openEdit() {
     setEditName(profile.full_name || '');
     setEditPos(profile.position || '');
@@ -272,11 +323,25 @@ export default function ProfileScreen({ navigation, route }) {
           </View>
 
           <View style={styles.fifaCenter}>
-            <View style={[styles.fifaAvatarRing, { borderColor: rColor }]}>
-              <View style={[styles.fifaAvatarInner, { backgroundColor: bgColor }]}>
-                <Text style={styles.fifaInitials}>{initials(profile.full_name)}</Text>
+            <TouchableOpacity onPress={handlePickPhoto} disabled={uploadingPhoto}>
+              <View style={[styles.fifaAvatarRing, { borderColor: rColor }]}>
+                {profile.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} style={styles.fifaAvatarImg} />
+                ) : (
+                  <View style={[styles.fifaAvatarInner, { backgroundColor: bgColor }]}>
+                    <Text style={styles.fifaInitials}>{initials(profile.full_name)}</Text>
+                  </View>
+                )}
+                {uploadingPhoto && (
+                  <View style={styles.fifaAvatarOverlay}>
+                    <ActivityIndicator color="#fff" size="small" />
+                  </View>
+                )}
               </View>
-            </View>
+              <View style={styles.cameraBtn}>
+                <Text style={styles.cameraBtnText}>📷</Text>
+              </View>
+            </TouchableOpacity>
             <Text style={styles.fifaName}>{profile.full_name}</Text>
             <Text style={[styles.fifaRatingLabel, { color: rColor }]}>{ratingLabel(rating)}</Text>
           </View>
@@ -581,9 +646,13 @@ const styles = StyleSheet.create({
   fifaLevelText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   fifaFlag: { fontSize: 16, marginTop: 4 },
   fifaCenter: { alignItems: 'center', flex: 1 },
-  fifaAvatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, padding: 3, marginBottom: 10 },
+  fifaAvatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, padding: 3, marginBottom: 10, position: 'relative' },
   fifaAvatarInner: { width: '100%', height: '100%', borderRadius: 42, justifyContent: 'center', alignItems: 'center' },
+  fifaAvatarImg: { width: '100%', height: '100%', borderRadius: 42 },
+  fifaAvatarOverlay: { position: 'absolute', inset: 0, borderRadius: 42, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   fifaInitials: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
+  cameraBtn: { position: 'absolute', bottom: 8, right: -4, backgroundColor: '#00A0D2', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#001F5B' },
+  cameraBtnText: { fontSize: 11 },
   fifaName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 2 },
   fifaRatingLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   fifaRight: { alignItems: 'center', gap: 10, minWidth: 55 },

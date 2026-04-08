@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
+import { useNotifications } from '../context/NotificationContext';
 
 function haptic(type = 'light') {
   if (Platform.OS === 'web') return;
@@ -30,7 +31,7 @@ function hoursFromNow(iso) {
   return `${Math.round(h / 24)} gün sonra`;
 }
 
-function MatchCard({ match, onJoin }) {
+function MatchCard({ match, onPress, onJoin }) {
   const maxP = match.max_players ?? 10;
   const curP = match.current_players ?? 0;
   const ratio = maxP ? Math.min(curP / maxP, 1) : 0;
@@ -41,7 +42,7 @@ function MatchCard({ match, onJoin }) {
   return (
     <TouchableOpacity
       style={styles.matchCard}
-      onPress={() => { haptic(); onJoin(match); }}
+      onPress={() => { haptic(); onPress ? onPress() : onJoin(match); }}
       activeOpacity={0.85}
     >
       <View style={[styles.matchStrip, { backgroundColor: fmtColor }]} />
@@ -91,6 +92,7 @@ function VenueCard({ venue, onPress }) {
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { unreadCount } = useNotifications();
   const [profile, setProfile]   = useState(null);
   const [matches, setMatches]   = useState([]);
   const [venues,  setVenues]    = useState([]);
@@ -183,6 +185,17 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate('Wallet')}
           >
             <Text style={styles.headerIconTxt}>💳</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Text style={styles.headerIconTxt}>🔔</Text>
+            {unreadCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerIconBtn}
@@ -281,7 +294,11 @@ export default function HomeScreen({ navigation }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.matchScroll}
             renderItem={({ item }) => (
-              <MatchCard match={item} onJoin={handleJoin} />
+              <MatchCard
+                match={item}
+                onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
+                onJoin={handleJoin}
+              />
             )}
           />
         )}
@@ -346,8 +363,10 @@ const styles = StyleSheet.create({
   greeting:     { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
   subtitle:     { color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 2 },
   headerRight:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerIconBtn:{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  headerIconBtn:{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   headerIconTxt:{ fontSize: 17 },
+  notifBadge:   { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#001F5B' },
+  notifBadgeText:{ color: '#fff', fontSize: 8, fontWeight: '800' },
   avatarCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
   avatarText:   { color: '#FFF', fontSize: 14, fontWeight: '800' },
 

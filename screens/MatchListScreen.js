@@ -239,6 +239,7 @@ export default function MatchListScreen({ navigation }) {
               match={match}
               joining={joiningId === match.id}
               isJoined={joinedIds.has(match.id)}
+              onPress={() => navigation.navigate('MatchDetail', { matchId: match.id })}
               onJoin={() => handleJoin(match)}
               onApply={() => { setApplyMatch(match); setApplyModal(true); }}
               onRate={() => navigation.navigate('MatchRating', {
@@ -313,7 +314,7 @@ export default function MatchListScreen({ navigation }) {
   );
 }
 
-function MatchCard({ match, joining, isJoined, onJoin, onApply, onRate }) {
+function MatchCard({ match, joining, isJoined, onPress, onJoin, onApply, onRate }) {
   const ballAnim    = useRef(new Animated.Value(0)).current;
   const ballOpacity = useRef(new Animated.Value(0)).current;
 
@@ -342,7 +343,7 @@ function MatchCard({ match, joining, isJoined, onJoin, onApply, onRate }) {
   }
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.92}>
       {/* Sol renkli şerit */}
       <View style={[styles.cardStrip, { backgroundColor: fmtColor }]} />
 
@@ -426,7 +427,7 @@ function MatchCard({ match, joining, isJoined, onJoin, onApply, onRate }) {
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

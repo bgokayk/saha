@@ -42,12 +42,29 @@ export default function MatchRatingScreen({ navigation, route }) {
     if (!myId) return;
     setSaving(true);
     try {
+      // Çift sayılmayı önle: bu maç için daha önce kendi statsını kaydettiyse atla
+      const { data: existing } = await supabase
+        .from('match_ratings')
+        .select('id')
+        .eq('match_id', matchId)
+        .eq('from_user', myId)
+        .eq('to_user', myId)
+        .maybeSingle();
+
       const { data: prof } = await supabase.from('profiles').select('goals, assists, matches_played').eq('id', myId).single();
-      await supabase.from('profiles').update({
-        goals: (prof?.goals || 0) + myGoals,
-        assists: (prof?.assists || 0) + myAssists,
-        matches_played: (prof?.matches_played || 0) + 1,
-      }).eq('id', myId);
+
+      if (!existing) {
+        // Kendi istatistiklerini işaretle (from_user = to_user = kendisi)
+        await supabase.from('match_ratings').upsert({
+          match_id: matchId, from_user: myId, to_user: myId, rating: 0,
+        }, { onConflict: 'match_id,from_user,to_user' });
+
+        await supabase.from('profiles').update({
+          goals: (prof?.goals || 0) + myGoals,
+          assists: (prof?.assists || 0) + myAssists,
+          matches_played: (prof?.matches_played || 0) + 1,
+        }).eq('id', myId);
+      }
 
       // Profili güncelle ki share ekranında güncel rating gösterilsin
       setMyProfile(prev => prev ? {
@@ -76,6 +93,20 @@ export default function MatchRatingScreen({ navigation, route }) {
         to_user: toUserId,
         rating,
       }, { onConflict: 'match_id,from_user,to_user' });
+
+      // Oyuncunun ortalama rating'ini güncelle
+      const { data: allRatings } = await supabase
+        .from('match_ratings')
+        .select('rating')
+        .eq('to_user', toUserId)
+        .neq('to_user', toUserId === myId ? '' : toUserId); // self-rating hariç
+      if (allRatings && allRatings.length > 0) {
+        const validRatings = allRatings.filter(r => r.rating > 0);
+        if (validRatings.length > 0) {
+          const avg = validRatings.reduce((s, r) => s + r.rating, 0) / validRatings.length;
+          await supabase.from('profiles').update({ rating: parseFloat(avg.toFixed(2)) }).eq('id', toUserId);
+        }
+      }
     } catch (e) {
       console.error(e);
     }
