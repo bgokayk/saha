@@ -21,6 +21,7 @@ import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import MarketScreen from './screens/MarketScreen';
 import MatchRatingScreen from './screens/MatchRatingScreen';
+import VenueDetailScreen from './screens/VenueDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -73,6 +74,7 @@ export default function App() {
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="Market" component={MarketScreen} />
             <Stack.Screen name="MatchRating" component={MatchRatingScreen} options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="VenueDetail" component={VenueDetailScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (
           // --- Giriş yapılmamış: Auth akışı ---

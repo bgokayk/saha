@@ -23,18 +23,21 @@ const FORMATS = [
   { id: '8v8',  icon: '🏆', label: '8v8',  desc: '16 oyuncu, büyük maç',    players: 16, color: '#F59E0B' },
 ];
 
-export default function CreateMatchScreen({ navigation }) {
+const HOURS = Array.from({ length: 16 }, (_, i) => i + 8); // 08–23
+
+export default function CreateMatchScreen({ navigation, route }) {
   const insets  = useSafeAreaInsets();
   const [step, setStep]         = useState(1);   // 1, 2, 3
   const [venues, setVenues]     = useState([]);
   const [format, setFormat]     = useState(null);
-  const [venue,  setVenue]      = useState(null);
+  const [venue,  setVenue]      = useState(route?.params?.preselectedVenue ?? null);
   const [date,   setDate]       = useState('');
   const [time,   setTime]       = useState('');
   const [price,  setPrice]      = useState('');
   const [loading, setLoading]   = useState(false);
   const [isSeeking, setIsSeeking]       = useState(false);
   const [neededPositions, setNeededPositions] = useState([]);
+  const [busyHours, setBusyHours]       = useState([]);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const confetti  = useRef(Array.from({ length: 12 }, () => ({
@@ -43,6 +46,23 @@ export default function CreateMatchScreen({ navigation }) {
   const [done, setDone] = useState(false);
 
   useEffect(() => { fetchVenues(); }, []);
+
+  useEffect(() => {
+    if (venue && date) fetchBusyHours();
+    else setBusyHours([]);
+  }, [venue, date]);
+
+  async function fetchBusyHours() {
+    const dayStart = `${date}T00:00:00`;
+    const dayEnd   = `${date}T23:59:59`;
+    const { data } = await supabase
+      .from('matches')
+      .select('match_date')
+      .eq('venue_id', venue.id)
+      .gte('match_date', dayStart)
+      .lte('match_date', dayEnd);
+    setBusyHours((data || []).map(m => new Date(m.match_date).getHours()));
+  }
 
   async function fetchVenues() {
     const { data } = await supabase.from('venues').select('*').order('name');
@@ -225,6 +245,12 @@ export default function CreateMatchScreen({ navigation }) {
                     </View>
                     <View style={styles.venueRight}>
                       <Text style={styles.venueRating}>⭐ {v.rating?.toFixed(1) || '4.5'}</Text>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate('VenueDetail', { venueId: v.id, venue: v })}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Text style={styles.venueDetailLink}>Detay →</Text>
+                      </TouchableOpacity>
                       {active && <Text style={styles.venueCheck}>✓</Text>}
                     </View>
                   </View>
@@ -262,19 +288,32 @@ export default function CreateMatchScreen({ navigation }) {
             <TextInput style={[styles.input, { marginBottom: 16 }]} placeholder="veya yaz: 2026-04-15"
               placeholderTextColor="#94A3B8" value={date} onChangeText={setDate} />
 
-            {/* Hızlı saat seçici */}
+            {/* Saat grid */}
             <Text style={styles.inputLabel}>Saat</Text>
-            <View style={styles.quickRow}>
-              {['18:00','19:00','20:00','21:00','22:00'].map(t => (
-                <TouchableOpacity key={t}
-                  style={[styles.quickChip, time === t && styles.quickChipActive]}
-                  onPress={() => setTime(t)}>
-                  <Text style={[styles.quickChipText, time === t && styles.quickChipTextActive]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
+            {venue && !date && (
+              <Text style={styles.slotHint}>Önce tarih seç, dolu saatler griye döner</Text>
+            )}
+            <View style={styles.slotGrid}>
+              {HOURS.map(h => {
+                const label = `${String(h).padStart(2, '0')}:00`;
+                const busy  = busyHours.includes(h);
+                const sel   = time === label;
+                return (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.slotCell, sel && styles.slotCellActive, busy && styles.slotCellBusy]}
+                    onPress={() => { if (!busy) { setTime(label); haptic(); } }}
+                    disabled={busy}
+                    activeOpacity={busy ? 1 : 0.7}
+                  >
+                    <Text style={[styles.slotText, sel && styles.slotTextActive, busy && styles.slotTextBusy]}>
+                      {label}
+                    </Text>
+                    {busy && <Text style={styles.slotBusyTag}>Dolu</Text>}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <TextInput style={[styles.input, { marginBottom: 16 }]} placeholder="veya yaz: 20:00"
-              placeholderTextColor="#94A3B8" value={time} onChangeText={setTime} />
 
             <Text style={styles.inputLabel}>Toplam Fiyat (₺)</Text>
             <TextInput
@@ -399,6 +438,7 @@ const styles = StyleSheet.create({
   venuePrice: { fontSize: 12, color: '#C9A84C', fontWeight: '600' },
   venueRight: { alignItems: 'flex-end', gap: 4 },
   venueRating: { fontSize: 12, fontWeight: '700' },
+  venueDetailLink: { fontSize: 11, color: '#00A0D2', fontWeight: '600' },
   venueCheck: { fontSize: 18, color: '#00A0D2' },
 
   // Date
@@ -412,6 +452,16 @@ const styles = StyleSheet.create({
   quickChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
   quickChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
   quickChipTextActive: { color: '#fff' },
+
+  slotHint: { fontSize: 12, color: '#94A3B8', marginBottom: 8 },
+  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  slotCell: { width: '22%', aspectRatio: 1.6, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+  slotCellActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
+  slotCellBusy: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
+  slotText: { fontSize: 13, fontWeight: '700', color: '#001F5B' },
+  slotTextActive: { color: '#fff' },
+  slotTextBusy: { color: '#CBD5E1', fontSize: 12 },
+  slotBusyTag: { fontSize: 9, color: '#94A3B8', marginTop: 1 },
 
   // Summary
   summary: { backgroundColor: '#001F5B', borderRadius: 16, padding: 18, marginTop: 20, gap: 10 },

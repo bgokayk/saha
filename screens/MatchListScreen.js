@@ -42,6 +42,7 @@ export default function MatchListScreen({ navigation }) {
   const [refreshing, setRefreshing]     = useState(false);
   const [selectedFormat, setSelectedFormat] = useState('Tümü');
   const [joiningId, setJoiningId]       = useState(null);
+  const [joinedIds, setJoinedIds]       = useState(new Set());
   const [listTab, setListTab]           = useState('all'); // 'nearby' | 'all'
 
   // Başvuru modal
@@ -50,6 +51,15 @@ export default function MatchListScreen({ navigation }) {
   const [applyPosition, setApplyPosition] = useState('');
   const [applyMessage, setApplyMessage] = useState('');
   const [applying, setApplying]         = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('match_players').select('match_id').eq('user_id', user.id).then(({ data }) => {
+        if (data) setJoinedIds(new Set(data.map(r => r.match_id)));
+      });
+    });
+  }, []);
 
   const fetchMatches = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -92,22 +102,40 @@ export default function MatchListScreen({ navigation }) {
       return;
     }
 
+    if (joinedIds.has(match.id)) {
+      Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
+      setJoiningId(null);
+      return;
+    }
+
     const { error } = await supabase
       .from('match_players')
       .insert({ match_id: match.id, user_id: user.id });
 
-    setJoiningId(null);
-
     if (error) {
+      setJoiningId(null);
       if (error.code === '23505') {
+        setJoinedIds(prev => new Set([...prev, match.id]));
         Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
       } else {
         Alert.alert('Hata', error.message);
       }
-    } else {
-      Alert.alert('Katıldın! 🎉', `${match.venues?.name ?? 'Maç'} için kaydın alındı.`);
-      fetchMatches();
+      return;
     }
+
+    // current_players artır
+    await supabase
+      .from('matches')
+      .update({ current_players: (match.current_players || 0) + 1 })
+      .eq('id', match.id);
+
+    haptic('success');
+    setJoinedIds(prev => new Set([...prev, match.id]));
+    setJoiningId(null);
+    // Listeyi güncelle (current_players göstermek için)
+    setMatches(prev => prev.map(m =>
+      m.id === match.id ? { ...m, current_players: (m.current_players || 0) + 1 } : m
+    ));
   }
 
   async function handleApply() {
@@ -210,6 +238,7 @@ export default function MatchListScreen({ navigation }) {
               key={match.id}
               match={match}
               joining={joiningId === match.id}
+              isJoined={joinedIds.has(match.id)}
               onJoin={() => handleJoin(match)}
               onApply={() => { setApplyMatch(match); setApplyModal(true); }}
               onRate={() => navigation.navigate('MatchRating', {
@@ -284,10 +313,9 @@ export default function MatchListScreen({ navigation }) {
   );
 }
 
-function MatchCard({ match, joining, onJoin, onApply, onRate }) {
-  const ballAnim  = useRef(new Animated.Value(0)).current;
+function MatchCard({ match, joining, isJoined, onJoin, onApply, onRate }) {
+  const ballAnim    = useRef(new Animated.Value(0)).current;
   const ballOpacity = useRef(new Animated.Value(0)).current;
-  const [joined, setJoined] = useState(false);
 
   const current  = match.current_players ?? 0;
   const max      = match.max_players ?? 10;
@@ -299,9 +327,8 @@ function MatchCard({ match, joining, onJoin, onApply, onRate }) {
   const isPast   = match.match_date && new Date(match.match_date) < new Date();
 
   function handlePress() {
-    if (full || joining || joined) return;
+    if (full || joining || isJoined) return;
     haptic('medium');
-    // ⚽ fly up animation
     ballAnim.setValue(0);
     ballOpacity.setValue(1);
     Animated.parallel([
@@ -311,7 +338,6 @@ function MatchCard({ match, joining, onJoin, onApply, onRate }) {
         Animated.timing(ballOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]),
     ]).start();
-    setJoined(true);
     onJoin();
   }
 
@@ -374,25 +400,25 @@ function MatchCard({ match, joining, onJoin, onApply, onRate }) {
             <Animated.Text style={[styles.flyBall, { transform: [{ translateY: ballAnim }], opacity: ballOpacity }]}>
               ⚽
             </Animated.Text>
-            {isPast && joined ? (
+            {isPast && isJoined ? (
               <TouchableOpacity style={styles.rateBtn} onPress={onRate}>
                 <Text style={styles.rateBtnText}>⭐ Değerlendir</Text>
               </TouchableOpacity>
             ) : (
               <>
-                {match.is_seeking_players && !joined && (
+                {match.is_seeking_players && !isJoined && (
                   <TouchableOpacity style={styles.applyBtn} onPress={onApply}>
                     <Text style={styles.applyBtnText}>Başvur</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                  style={[styles.joinBtn, (full || joined) && styles.joinBtnDone]}
+                  style={[styles.joinBtn, (full || isJoined) && styles.joinBtnDone]}
                   onPress={handlePress}
-                  disabled={full || joining || joined}
+                  disabled={full || joining || isJoined}
                 >
                   {joining
                     ? <ActivityIndicator color="#FFF" size="small" />
-                    : <Text style={styles.joinBtnText}>{joined ? 'Katıldın ✓' : full ? 'Dolu' : 'Katıl'}</Text>
+                    : <Text style={styles.joinBtnText}>{isJoined ? 'Katıldın ✓' : full ? 'Dolu' : 'Katıl'}</Text>
                   }
                 </TouchableOpacity>
               </>
