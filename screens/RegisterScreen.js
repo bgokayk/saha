@@ -1,0 +1,126 @@
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
+} from 'react-native';
+import { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
+
+export default function RegisterScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [position, setPosition] = useState('');
+  const [loading, setLoading] = useState(false);
+  const positions = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
+
+  async function handleRegister() {
+    if (!email || !password || !fullName) {
+      Alert.alert('Hata', 'Ad, email ve şifre zorunlu.');
+      return;
+    }
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) {
+      Alert.alert('Kayıt Hatası', error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      // Trigger zaten boş profil oluşturuyor, upsert ile güncelle
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        full_name: fullName,
+        phone: phone || null,
+        position: position || null,
+      }, { onConflict: 'id', ignoreDuplicates: false });
+    }
+
+    setLoading(false);
+    Alert.alert('Başarılı! 🎉', 'Hesabın oluşturuldu. Giriş yapabilirsin.', [
+      { text: 'Tamam', onPress: () => navigation.navigate('Login') }
+    ]);
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+      <TouchableOpacity style={[styles.back, { marginTop: insets.top }]} onPress={() => navigation.goBack()}>
+        <Text style={styles.backText}>← Geri</Text>
+      </TouchableOpacity>
+
+      <View style={styles.header}>
+        <Text style={styles.title}>Hesap Oluştur</Text>
+        <Text style={styles.subtitle}>Sahaya hoş geldin ⚽</Text>
+      </View>
+
+      <View style={styles.form}>
+        <Text style={styles.label}>Ad Soyad</Text>
+        <TextInput style={styles.input} placeholder="Gökay Küpeli" placeholderTextColor="rgba(255,255,255,0.3)" value={fullName} onChangeText={setFullName} />
+
+        <Text style={styles.label}>Telefon</Text>
+        <TextInput style={styles.input} placeholder="0555 000 00 00" placeholderTextColor="rgba(255,255,255,0.3)" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+
+        <Text style={styles.label}>E-posta</Text>
+        <TextInput style={styles.input} placeholder="ornek@mail.com" placeholderTextColor="rgba(255,255,255,0.3)" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+
+        <Text style={styles.label}>Şifre</Text>
+        <TextInput style={styles.input} placeholder="••••••••" placeholderTextColor="rgba(255,255,255,0.3)" secureTextEntry value={password} onChangeText={setPassword} />
+
+        <Text style={styles.label}>Pozisyonun</Text>
+        <View style={styles.positionRow}>
+          {positions.map(pos => (
+            <TouchableOpacity
+              key={pos}
+              style={[styles.posBtn, position === pos && styles.posBtnActive]}
+              onPress={() => setPosition(pos)}
+            >
+              <Text style={[styles.posBtnText, position === pos && styles.posBtnTextActive]}>
+                {pos}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.btnPrimary} onPress={handleRegister} disabled={loading}>
+        {loading
+          ? <ActivityIndicator color="#001F5B" />
+          : <Text style={styles.btnPrimaryText}>Kayıt Ol</Text>
+        }
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+        <Text style={styles.loginText}>
+          Zaten hesabın var mı? <Text style={{ color: '#00A0D2' }}>Giriş yap</Text>
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#001F5B', paddingHorizontal: 28, paddingTop: 20 },
+  back: { marginBottom: 32 },
+  backText: { color: 'rgba(255,255,255,0.5)', fontSize: 15 },
+  header: { marginBottom: 32 },
+  title: { color: '#FFFFFF', fontSize: 28, fontWeight: '700', marginBottom: 8 },
+  subtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
+  form: { gap: 4, marginBottom: 28 },
+  label: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 6, marginTop: 14 },
+  input: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  positionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  posBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.06)' },
+  posBtnActive: { backgroundColor: '#00A0D2', borderColor: '#00A0D2' },
+  posBtnText: { color: '#FFFFFF', fontSize: 13 },
+  posBtnTextActive: { fontWeight: '700' },
+  btnPrimary: { backgroundColor: '#00A0D2', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
+  btnPrimaryText: { color: '#001F5B', fontSize: 16, fontWeight: '700' },
+  loginText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' },
+});
