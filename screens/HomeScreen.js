@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, ActivityIndicator, Platform
+  TouchableOpacity, ActivityIndicator, Platform, Alert
 } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,10 +66,34 @@ function MatchCard({ match, onJoin }) {
   );
 }
 
+const VENUE_COLORS = ['#001F5B', '#0F172A', '#134E4A', '#1E1B4B', '#431407', '#0C4A6E'];
+
+function VenueCard({ venue, onPress }) {
+  const bg = VENUE_COLORS[venue.name?.charCodeAt(0) % VENUE_COLORS.length] || '#001F5B';
+  return (
+    <TouchableOpacity style={styles.venueCard} onPress={onPress} activeOpacity={0.85}>
+      <View style={[styles.venueCardTop, { backgroundColor: bg }]}>
+        <Text style={styles.venueCardEmoji}>🏟️</Text>
+        {venue.rating && (
+          <View style={styles.venueCardRating}>
+            <Text style={styles.venueCardRatingText}>⭐ {Number(venue.rating).toFixed(1)}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.venueCardBody}>
+        <Text style={styles.venueCardName} numberOfLines={1}>{venue.name}</Text>
+        <Text style={styles.venueCardDistrict} numberOfLines={1}>📍 {venue.district || venue.city || 'Bursa'}</Text>
+        <Text style={styles.venueCardPrice}>{venue.price_per_hour || '—'}₺/sa</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [profile, setProfile]   = useState(null);
   const [matches, setMatches]   = useState([]);
+  const [venues,  setVenues]    = useState([]);
   const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('home');
 
@@ -82,13 +106,21 @@ export default function HomeScreen({ navigation }) {
           .from('profiles').select('*').eq('id', user.id).single();
         setProfile(prof);
       }
-      const { data: matchData } = await supabase
-        .from('matches')
-        .select('*, venues(name, district, city)')
-        .eq('status', 'open')
-        .order('match_date', { ascending: true })
-        .limit(8);
+      const [{ data: matchData }, { data: venueData }] = await Promise.all([
+        supabase
+          .from('matches')
+          .select('*, venues(name, district, city)')
+          .eq('status', 'open')
+          .order('match_date', { ascending: true })
+          .limit(8),
+        supabase
+          .from('venues')
+          .select('*')
+          .order('rating', { ascending: false })
+          .limit(6),
+      ]);
       setMatches(matchData || []);
+      setVenues(venueData || []);
     } catch (_) {}
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,10 +129,24 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   async function handleJoin(match) {
-    haptic('success');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('match_players').insert({ match_id: match.id, user_id: user.id });
+    const { error } = await supabase
+      .from('match_players')
+      .insert({ match_id: match.id, user_id: user.id });
+    if (error) {
+      if (error.code === '23505') {
+        Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
+      } else {
+        Alert.alert('Hata', error.message);
+      }
+      return;
+    }
+    await supabase
+      .from('matches')
+      .update({ current_players: (match.current_players || 0) + 1 })
+      .eq('id', match.id);
+    haptic('success');
     navigation.navigate('MatchList');
   }
 
@@ -184,6 +230,31 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* ── Yakın Sahalar ── */}
+        {venues.length > 0 && (
+          <>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Yakın Sahalar</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('CreateMatch')}>
+                <Text style={styles.seeAll}>Tümü →</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={venues}
+              keyExtractor={item => item.id?.toString()}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.matchScroll}
+              renderItem={({ item }) => (
+                <VenueCard
+                  venue={item}
+                  onPress={() => navigation.navigate('VenueDetail', { venueId: item.id, venue: item })}
+                />
+              )}
+            />
+          </>
+        )}
 
         {/* ── Yakın Maçlar ── */}
         <View style={styles.sectionRow}>
@@ -316,6 +387,17 @@ const styles = StyleSheet.create({
   matchCount:    { fontSize: 10, color: '#64748B' },
   joinBtn:       { paddingVertical: 8, borderRadius: 10, alignItems: 'center', marginTop: 2 },
   joinBtnText:   { color: '#FFF', fontSize: 12, fontWeight: '700' },
+
+  // Venue Cards
+  venueCard:        { width: 140, backgroundColor: '#FFFFFF', borderRadius: 16, marginRight: 12, overflow: 'hidden', shadowColor: '#001F5B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  venueCardTop:     { height: 70, justifyContent: 'center', alignItems: 'center' },
+  venueCardEmoji:   { fontSize: 28 },
+  venueCardRating:  { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  venueCardRatingText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  venueCardBody:    { padding: 10, gap: 3 },
+  venueCardName:    { fontSize: 12, fontWeight: '800', color: '#001F5B' },
+  venueCardDistrict:{ fontSize: 10, color: '#94A3B8' },
+  venueCardPrice:   { fontSize: 11, fontWeight: '700', color: '#C9A84C' },
 
   // Empty
   emptyHorizontal: { marginLeft: 20, marginBottom: 8 },

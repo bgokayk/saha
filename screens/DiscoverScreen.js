@@ -97,12 +97,13 @@ export default function DiscoverScreen({ navigation }) {
     });
   }, []);
 
-  useEffect(() => { fetchPlayers(); setIndex(0); }, [filter]);
+  useEffect(() => { fetchPlayers(); }, [filter, myId]);
 
   async function fetchPlayers() {
     setLoading(true);
     let q = supabase.from('profiles').select('*').order('matches_played', { ascending: false });
     if (filter !== 'Tümü') q = q.eq('position', filter);
+    if (myId) q = q.neq('id', myId);
     const { data } = await q.limit(20);
     setPlayers(data || []);
     setIndex(0);
