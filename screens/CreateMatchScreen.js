@@ -1,11 +1,18 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Animated, Share, Switch
+  Platform, Animated, Share, Switch, Image
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+
+function hashColor(name) {
+  const colors = ['#1a3a5c', '#1a4c3a', '#3a1a4c', '#4c1a1a', '#1a3a3a', '#3a3a1a'];
+  let h = 0;
+  for (let c of (name || '')) h = c.charCodeAt(0) + h * 31;
+  return colors[Math.abs(h) % colors.length];
+}
 
 function haptic(type = 'light') {
   if (Platform.OS === 'web') return;
@@ -262,8 +269,20 @@ export default function CreateMatchScreen({ navigation, route }) {
                   activeOpacity={0.85}
                 >
                   <View style={styles.venueRow}>
-                    <View style={[styles.venueAvatar, { backgroundColor: 'rgba(0,212,255,0.12)' }]}>
-                      <Text style={styles.venueAvatarIcon}>🏟️</Text>
+                    {/* Visual avatar: photo or colored placeholder */}
+                    <View style={styles.venueAvatarWrap}>
+                      {v.photo_url ? (
+                        <Image source={{ uri: v.photo_url }} style={styles.venueAvatarImg} />
+                      ) : (
+                        <View style={[styles.venueAvatar, { backgroundColor: hashColor(v.name) }]}>
+                          <Text style={styles.venueAvatarIcon}>🏟️</Text>
+                        </View>
+                      )}
+                      {active && (
+                        <View style={styles.venueAvatarCheck}>
+                          <Text style={styles.venueAvatarCheckText}>✓</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.venueInfo}>
                       <Text style={[styles.venueName, active && { color: '#00D4FF' }]}>{v.name}</Text>
@@ -271,14 +290,15 @@ export default function CreateMatchScreen({ navigation, route }) {
                       <Text style={styles.venuePrice}>{v.price_per_hour || 300}₺/sa</Text>
                     </View>
                     <View style={styles.venueRight}>
-                      <Text style={styles.venueRating}>⭐ {v.rating?.toFixed(1) || '4.5'}</Text>
+                      <View style={styles.venueRatingBadge}>
+                        <Text style={styles.venueRating}>⭐ {v.rating?.toFixed(1) || '4.5'}</Text>
+                      </View>
                       <TouchableOpacity
                         onPress={() => navigation.navigate('VenueDetail', { venueId: v.id, venue: v })}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
                         <Text style={styles.venueDetailLink}>Detay →</Text>
                       </TouchableOpacity>
-                      {active && <Text style={styles.venueCheck}>✓</Text>}
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -457,16 +477,20 @@ const styles = StyleSheet.create({
   // Venue
   venueCard: { backgroundColor: '#0F1E35', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)' },
   venueRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  venueAvatar: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  venueAvatarIcon: { fontSize: 20 },
+  venueAvatarWrap: { position: 'relative', width: 60, height: 60, borderRadius: 14, overflow: 'hidden' },
+  venueAvatarImg: { width: 60, height: 60, borderRadius: 14 },
+  venueAvatar: { width: 60, height: 60, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  venueAvatarIcon: { fontSize: 26 },
+  venueAvatarCheck: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#00D4FF', width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#0A1628' },
+  venueAvatarCheckText: { color: '#0A1628', fontSize: 10, fontWeight: '900' },
   venueInfo: { flex: 1, gap: 2 },
   venueName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   venueDistrict: { fontSize: 12, color: '#8B9BB4' },
   venuePrice: { fontSize: 12, color: '#FFB800', fontWeight: '600' },
-  venueRight: { alignItems: 'flex-end', gap: 4 },
-  venueRating: { fontSize: 12, fontWeight: '700' },
+  venueRight: { alignItems: 'flex-end', gap: 6 },
+  venueRatingBadge: { backgroundColor: 'rgba(255,184,0,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,184,0,0.25)' },
+  venueRating: { fontSize: 12, fontWeight: '700', color: '#FFB800' },
   venueDetailLink: { fontSize: 11, color: '#00D4FF', fontWeight: '600' },
-  venueCheck: { fontSize: 18, color: '#00D4FF' },
 
   // Date
   dateRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },

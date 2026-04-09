@@ -42,6 +42,24 @@ const STAT_PERIODS = ['Bu Hafta', 'Bu Ay', 'Tüm Zamanlar'];
 
 const POS_SHORT = { 'Kaleci': 'KAL', 'Defans': 'DEF', 'Orta Saha': 'ORT', 'Forvet': 'FOR' };
 
+const EXPERIENCE_LEVELS = [
+  { id: 'amateur', label: 'Amatör',    desc: 'Halısaha / mahalle maçları', icon: '⚽', isElite: false },
+  { id: 'school',  label: 'Okul Takımı', desc: 'Liseler arası / üniversite', icon: '🏫', isElite: false },
+  { id: 'bal',     label: 'BAL Ligi',  desc: 'Bölgesel Amatör Lig',         icon: '🏅', isElite: true  },
+  { id: 'lig3',    label: '3. Lig',    desc: 'TFF 3. Lig',                   icon: '🥉', isElite: true  },
+  { id: 'lig2',    label: '2. Lig',    desc: 'TFF 2. Lig',                   icon: '🥈', isElite: true  },
+  { id: 'lig1',    label: '1. Lig',    desc: 'TFF 1. Lig',                   icon: '🥇', isElite: true  },
+  { id: 'super',   label: 'Süper Lig', desc: 'Spor Toto Süper Lig',          icon: '🏆', isElite: true  },
+];
+
+const EXPERIENCE_YEARS = [
+  '1 yıldan az', '1-2 yıl', '3-5 yıl', '5-10 yıl', '10-15 yıl', '15+ yıl',
+];
+
+function getExpInfo(level) {
+  return EXPERIENCE_LEVELS.find(e => e.id === level) || null;
+}
+
 export default function ProfileScreen({ navigation, route }) {
   const insets    = useSafeAreaInsets();
   const profileId = route?.params?.profileId || null;
@@ -56,6 +74,9 @@ export default function ProfileScreen({ navigation, route }) {
   const [editName, setEditName]   = useState('');
   const [editPos, setEditPos]     = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editExpLevel, setEditExpLevel] = useState('');
+  const [editExpYears, setEditExpYears] = useState('');
+  const [editExpDetail, setEditExpDetail] = useState('');
   const [saving, setSaving]         = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
@@ -241,6 +262,9 @@ export default function ProfileScreen({ navigation, route }) {
     setEditName(profile.full_name || '');
     setEditPos(profile.position || '');
     setEditPhone(profile.phone || '');
+    setEditExpLevel(profile.experience_level || '');
+    setEditExpYears(profile.experience_years || '');
+    setEditExpDetail(profile.experience_detail || '');
     setEditModal(true);
   }
 
@@ -251,6 +275,9 @@ export default function ProfileScreen({ navigation, route }) {
     setSaving(true);
     const updates = { full_name: editName.trim(), position: editPos };
     if (editPhone.trim()) updates.phone = editPhone.trim();
+    if (editExpLevel) updates.experience_level = editExpLevel;
+    if (editExpYears) updates.experience_years = editExpYears;
+    updates.experience_detail = editExpDetail.trim() || null;
     const { error } = await supabase.from('profiles').update(updates).eq('id', profile.id);
     setSaving(false);
     if (error) { Alert.alert('Hata', error.message); return; }
@@ -447,6 +474,29 @@ export default function ProfileScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* ── Futbol Geçmişi Bandı ── */}
+        {profile.experience_level && (() => {
+          const expInfo = getExpInfo(profile.experience_level);
+          if (!expInfo) return null;
+          const isElite = expInfo.isElite;
+          return (
+            <View style={[styles.expBadgeRow, isElite && styles.expBadgeRowElite]}>
+              <Text style={styles.expBadgeIcon}>{expInfo.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.expBadgeLabel, isElite && { color: '#FFB800' }]}>
+                  {expInfo.label}{profile.experience_years ? ` · ${profile.experience_years}` : ''}
+                </Text>
+                {profile.experience_detail ? (
+                  <Text style={styles.expBadgeDetail}>{profile.experience_detail}</Text>
+                ) : (
+                  <Text style={styles.expBadgeDetail}>{expInfo.desc}</Text>
+                )}
+              </View>
+              {isElite && <View style={styles.eliteDot}><Text style={styles.eliteDotText}>PRO</Text></View>}
+            </View>
+          );
+        })()}
+
         {/* ── Sekme ── */}
         <View style={styles.tabSegment}>
           {[
@@ -581,6 +631,7 @@ export default function ProfileScreen({ navigation, route }) {
           <View style={styles.editSheet}>
             <View style={styles.editHandle} />
             <Text style={styles.editTitle}>Profili Düzenle</Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
             <Text style={styles.editLabel}>İsim Soyisim</Text>
             <TextInput
@@ -614,6 +665,43 @@ export default function ProfileScreen({ navigation, route }) {
               keyboardType="phone-pad"
             />
 
+            <Text style={styles.editLabel}>Futbol Geçmişi</Text>
+            <View style={styles.posRow}>
+              {EXPERIENCE_LEVELS.map(e => (
+                <TouchableOpacity
+                  key={e.id}
+                  style={[styles.posChip, editExpLevel === e.id && styles.posChipActive, editExpLevel === e.id && e.isElite && styles.posChipGold]}
+                  onPress={() => setEditExpLevel(editExpLevel === e.id ? '' : e.id)}
+                >
+                  <Text style={[styles.posChipText, editExpLevel === e.id && styles.posChipTextActive, editExpLevel === e.id && e.isElite && { color: '#FFB800' }]}>
+                    {e.icon} {e.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.editLabel}>Kaç Yıldır Oynuyorsun?</Text>
+            <View style={styles.posRow}>
+              {EXPERIENCE_YEARS.map(y => (
+                <TouchableOpacity
+                  key={y}
+                  style={[styles.posChip, editExpYears === y && styles.posChipActive]}
+                  onPress={() => setEditExpYears(editExpYears === y ? '' : y)}
+                >
+                  <Text style={[styles.posChipText, editExpYears === y && styles.posChipTextActive]}>{y}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.editLabel}>Detay (opsiyonel)</Text>
+            <TextInput
+              style={styles.editInput}
+              value={editExpDetail}
+              onChangeText={setEditExpDetail}
+              placeholder="Örn: Bursaspor altyapı 2018-2020"
+              placeholderTextColor="#94A3B8"
+            />
+
             <View style={styles.editBtnRow}>
               <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditModal(false)}>
                 <Text style={styles.editCancelText}>İptal</Text>
@@ -625,6 +713,7 @@ export default function ProfileScreen({ navigation, route }) {
                 }
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -783,7 +872,7 @@ const styles = StyleSheet.create({
 
   // Edit modal
   editOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  editSheet:      { backgroundColor: '#0F1E35', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  editSheet:      { backgroundColor: '#0F1E35', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderColor: 'rgba(0,212,255,0.2)', maxHeight: '90%' },
   editHandle:     { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   editTitle:      { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 20 },
   editLabel:      { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 16 },
@@ -826,4 +915,16 @@ const styles = StyleSheet.create({
   walletArrow:  { color: '#00D4FF', fontSize: 18, fontWeight: '700' },
   proBadge:     { backgroundColor: '#FFB800', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   proBadgeText: { color: '#0A1628', fontSize: 11, fontWeight: '800' },
+
+  // Futbol Geçmişi bandı
+  expBadgeRow:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F1E35', marginHorizontal: 16, marginTop: 10, borderRadius: 14, padding: 14, gap: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  expBadgeRowElite: { borderColor: 'rgba(255,184,0,0.35)', backgroundColor: 'rgba(255,184,0,0.05)' },
+  expBadgeIcon:     { fontSize: 26 },
+  expBadgeLabel:    { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  expBadgeDetail:   { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 },
+  eliteDot:         { backgroundColor: '#FFB800', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  eliteDotText:     { color: '#0A1628', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Gold chip variant
+  posChipGold:      { borderColor: '#FFB800', backgroundColor: 'rgba(255,184,0,0.08)' },
 });

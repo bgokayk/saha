@@ -21,6 +21,16 @@ function haptic(type = 'light') {
 
 const POS_SHORT = { 'Kaleci': 'KAL', 'Defans': 'DEF', 'Orta Saha': 'ORT', 'Forvet': 'FOR' };
 
+const EXP_LEVELS = {
+  amateur: { label: 'Amatör',    icon: '⚽', isElite: false },
+  school:  { label: 'Okul Takımı', icon: '🏫', isElite: false },
+  bal:     { label: 'BAL Ligi',  icon: '🏅', isElite: true  },
+  lig3:    { label: '3. Lig',    icon: '🥉', isElite: true  },
+  lig2:    { label: '2. Lig',    icon: '🥈', isElite: true  },
+  lig1:    { label: '1. Lig',    icon: '🥇', isElite: true  },
+  super:   { label: 'Süper Lig', icon: '🏆', isElite: true  },
+};
+
 function cardBg(rating) {
   if (rating >= 8.5) return '#1A0F00';
   if (rating >= 7.0) return '#001A10';
@@ -61,6 +71,17 @@ function PlayerCard({ profile, style, cardW, cardH }) {
         <Text style={[styles.cardName, { color: rColor }]} numberOfLines={1}>
           {(profile.full_name || '').toUpperCase()}
         </Text>
+        {profile.experience_level && (() => {
+          const exp = EXP_LEVELS[profile.experience_level];
+          if (!exp) return null;
+          return (
+            <View style={[styles.expBadge, exp.isElite && styles.expBadgeGold]}>
+              <Text style={styles.expBadgeText}>
+                {exp.icon} {exp.label}{profile.experience_years ? ` · ${profile.experience_years}` : ''}
+              </Text>
+            </View>
+          );
+        })()}
         <View style={styles.statsRow}>
           {[
             { label: 'MAÇ', val: profile.matches_played || 0 },
@@ -306,6 +327,9 @@ const styles = StyleSheet.create({
   statSep:    { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 12 },
   statNum:    { fontSize: 22, fontWeight: '900' },
   statLabel:  { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' },
+  expBadge:     { alignSelf: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 },
+  expBadgeGold: { backgroundColor: 'rgba(255,184,0,0.18)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.4)' },
+  expBadgeText: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '700' },
 
   overlayLeft:      { position: 'absolute', inset: 0, borderRadius: 20, zIndex: 20, backgroundColor: 'rgba(255,71,87,0.8)', justifyContent: 'center', alignItems: 'center' },
   overlayRight:     { position: 'absolute', inset: 0, borderRadius: 20, zIndex: 20, backgroundColor: 'rgba(0,224,150,0.8)', justifyContent: 'center', alignItems: 'center' },

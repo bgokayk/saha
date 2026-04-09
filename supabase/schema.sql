@@ -15,8 +15,23 @@ create table if not exists profiles (
   matches_played   int  default 0,
   wallet_balance   int  default 0,
   is_premium       boolean default false,
+  rating           float default 5.0,
   created_at       timestamptz default now()
 );
+
+-- Rating kolonu mevcut tablolara ekle (idempotent)
+alter table profiles add column if not exists rating float default 5.0;
+
+-- Futbolcu geçmişi kolonları
+alter table profiles add column if not exists experience_level text default 'Amatör';
+alter table profiles add column if not exists experience_years int default 0;
+alter table profiles add column if not exists experience_detail text;
+alter table profiles add column if not exists city text default 'Bursa';
+alter table profiles add column if not exists district text;
+
+-- Saha fotoğrafları
+alter table venues add column if not exists photo_url text;
+alter table venues add column if not exists description text;
 
 -- Yeni kullanıcı kaydında otomatik profil oluştur
 create or replace function public.handle_new_user()
@@ -250,7 +265,8 @@ create policy "vp_delete" on venue_products for delete
   using (exists (select 1 from venues where id = venue_id and owner_id = auth.uid()));
 
 -- Market orders
-create policy "mo_select" on market_orders for select using (auth.uid() = user_id);
+create policy "mo_select" on market_orders for select
+  using (auth.uid() = user_id or exists (select 1 from venues where id = venue_id and owner_id = auth.uid()));
 create policy "mo_insert" on market_orders for insert with check (auth.uid() = user_id);
 
 -- Venue features

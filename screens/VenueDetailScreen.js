@@ -1,10 +1,17 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Linking, Platform
+  ActivityIndicator, Alert, Linking, Platform, Image
 } from 'react-native';
 import { useEffect, useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+
+function hashColor(name) {
+  const colors = ['#1a3a5c', '#1a4c3a', '#3a1a4c', '#4c1a1a', '#1a3a3a', '#3a3a1a'];
+  let h = 0;
+  for (let c of (name || '')) h = c.charCodeAt(0) + h * 31;
+  return colors[Math.abs(h) % colors.length];
+}
 
 /* ── Feature tanımlari ─────────────────────────────────── */
 const FEATURES = [
@@ -150,9 +157,20 @@ export default function VenueDetailScreen({ navigation, route }) {
 
         {/* ── Hero Section ── */}
         <View style={[styles.hero, { paddingTop: insets.top }]}>
-          <View style={styles.heroGradient}>
-            <View style={styles.heroAccent} />
-          </View>
+          {/* Background: photo or gradient placeholder */}
+          {venue.photo_url ? (
+            <Image
+              source={{ uri: venue.photo_url }}
+              style={styles.heroBgImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.heroBgPlaceholder, { backgroundColor: hashColor(venue.name) }]}>
+              <Text style={styles.heroBgEmoji}>{'\u{1F3DF}\uFE0F'}</Text>
+            </View>
+          )}
+          {/* Dark overlay for text legibility */}
+          <View style={styles.heroOverlay} />
 
           {/* Back button */}
           <TouchableOpacity
@@ -163,9 +181,22 @@ export default function VenueDetailScreen({ navigation, route }) {
             <Text style={styles.backBtnText}>{'\u2190'}</Text>
           </TouchableOpacity>
 
+          {/* Premium badge */}
+          {venue.is_active && venue.price_per_hour >= 500 && (
+            <View style={[styles.heroPremiumBadge, { top: insets.top + 10 }]}>
+              <Text style={styles.heroPremiumText}>Premium</Text>
+            </View>
+          )}
+
+          {/* Rating badge */}
+          <View style={styles.heroRatingBadge}>
+            <Text style={styles.heroRatingText}>
+              {'\u2B50'} {venue.rating ? Number(venue.rating).toFixed(1) : '5.0'}
+            </Text>
+          </View>
+
           {/* Venue info overlay */}
           <View style={styles.heroContent}>
-            <Text style={styles.heroEmoji}>{'\u{1F3DF}\uFE0F'}</Text>
             <Text style={styles.heroName}>{venue.name}</Text>
             <Text style={styles.heroLocation}>
               {'\u{1F4CD}'} {[venue.district, venue.city].filter(Boolean).join(', ') || 'Bursa'}
@@ -324,38 +355,75 @@ const styles = StyleSheet.create({
 
   /* Hero */
   hero: {
-    height: 220,
+    height: 260,
     position: 'relative',
     justifyContent: 'flex-end',
+    overflow: 'hidden',
   },
-  heroGradient: {
+  heroBgImage: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: NAVY,
+    width: '100%',
+    height: '100%',
   },
-  heroAccent: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    height: 120,
-    backgroundColor: NAVY2,
-    opacity: 0.6,
+  heroBgPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroBgEmoji: {
+    fontSize: 72,
+    opacity: 0.35,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,22,40,0.55)',
   },
   heroContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
-  },
-  heroEmoji: {
-    fontSize: 36,
-    marginBottom: 8,
+    zIndex: 2,
   },
   heroName: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   heroLocation: {
-    color: GRAY,
+    color: 'rgba(255,255,255,0.75)',
     fontSize: 13,
+  },
+  heroPremiumBadge: {
+    position: 'absolute',
+    right: 16,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    zIndex: 10,
+  },
+  heroPremiumText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  heroRatingBadge: {
+    position: 'absolute',
+    bottom: 56,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    zIndex: 10,
+  },
+  heroRatingText: {
+    color: GOLD,
+    fontSize: 14,
+    fontWeight: '800',
   },
   backBtn: {
     position: 'absolute',

@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, ActivityIndicator, Platform, Alert, Animated, Share
+  TouchableOpacity, ActivityIndicator, Platform, Alert, Animated, Share, Image
 } from 'react-native';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,28 +113,54 @@ function SeekingCard({ match, onApply }) {
   );
 }
 
-const VENUE_COLORS = ['#0D1F3C', '#1A0F3C', '#0F2A1A', '#2A0F1A', '#1A2A0F', '#0F1A2A'];
+function hashColor(name) {
+  const colors = ['#1a3a5c', '#1a4c3a', '#3a1a4c', '#4c1a1a', '#1a3a3a', '#3a3a1a'];
+  let h = 0;
+  for (let c of (name || '')) h = c.charCodeAt(0) + h * 31;
+  return colors[Math.abs(h) % colors.length];
+}
 
 function VenueCard({ venue, onPress }) {
-  const bg = VENUE_COLORS[venue.name?.charCodeAt(0) % VENUE_COLORS.length] || '#0D1F3C';
   return (
-    <TouchableOpacity style={styles.venueCard} onPress={onPress} activeOpacity={0.85}>
-      <View style={[styles.venueCardTop, { backgroundColor: bg }]}>
-        <Text style={styles.venueCardEmoji}>🏟️</Text>
-        {venue.rating && (
-          <View style={styles.venueCardRating}>
-            <Text style={styles.venueCardRatingText}>⭐ {Number(venue.rating).toFixed(1)}</Text>
+    <TouchableOpacity style={styles.venueCardNew} onPress={onPress} activeOpacity={0.85}>
+      {/* Photo area */}
+      <View style={styles.venuePhotoArea}>
+        {venue.photo_url ? (
+          <Image source={{ uri: venue.photo_url }} style={styles.venuePhoto} />
+        ) : (
+          <View style={[styles.venuePhotoPlaceholder, { backgroundColor: hashColor(venue.name) }]}>
+            <Text style={styles.venuePhotoEmoji}>🏟️</Text>
+            <Text style={styles.venuePhotoText}>{venue.name}</Text>
+          </View>
+        )}
+        {/* Rating badge (bottom right on photo) */}
+        <View style={styles.venueRatingBadge}>
+          <Text style={styles.venueRatingText}>⭐ {Number(venue.rating || 4.5).toFixed(1)}</Text>
+        </View>
+        {/* Premium badge (top left, if venue is premium/featured) */}
+        {venue.is_active && venue.price_per_hour >= 500 && (
+          <View style={styles.venuePremiumBadge}>
+            <Text style={styles.venuePremiumText}>Premium</Text>
           </View>
         )}
       </View>
-      <View style={styles.venueCardBody}>
-        <Text style={styles.venueCardName} numberOfLines={1}>{venue.name}</Text>
-        <Text style={styles.venueCardDistrict} numberOfLines={1}>📍 {venue.district || venue.city || 'Bursa'}</Text>
-        <Text style={styles.venueCardPrice}>{venue.price_per_hour || '—'}₺/sa</Text>
+      {/* Info below photo */}
+      <View style={styles.venueInfoArea}>
+        <Text style={styles.venueCardName}>{venue.name}</Text>
+        <Text style={styles.venueCardLocation}>📍 {venue.district || 'Bursa'}, {venue.city || 'Bursa'}</Text>
+        <View style={styles.venueCardBottom}>
+          <Text style={styles.venueCardPrice}>₺{venue.price_per_hour}/sa</Text>
+          <View style={styles.venueCardBtn}>
+            <Text style={styles.venueCardBtnText}>Detay →</Text>
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
 }
+
+const BRANCHES = ['Futbol'];
+const CITIES   = ['Bursa', 'İstanbul', 'Ankara', 'İzmir', 'Antalya'];
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -146,6 +172,16 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const xpAnim = useRef(new Animated.Value(0)).current;
+
+  const [selectedBranch, setSelectedBranch] = useState('Futbol');
+  const [selectedCity,   setSelectedCity]   = useState('Bursa');
+  const [showBranchPicker, setShowBranchPicker] = useState(false);
+  const [showCityPicker,   setShowCityPicker]   = useState(false);
+
+  const [leaderboard,   setLeaderboard]   = useState([]);
+  const [activePlayers, setActivePlayers] = useState([]);
+  const [weeklyStats,   setWeeklyStats]   = useState({ matches: 0, goals: 0, players: 0 });
+  const [extraLoading,  setExtraLoading]  = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -170,7 +206,31 @@ export default function HomeScreen({ navigation }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchExtraData = useCallback(async () => {
+    setExtraLoading(true);
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const [
+        { data: lbData },
+        { data: apData },
+        { data: weekMatchData },
+      ] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, goals, assists, matches_played, position, avatar_url').order('goals', { ascending: false }).limit(5),
+        supabase.from('profiles').select('id, full_name, matches_played, position, avatar_url').order('matches_played', { ascending: false }).limit(6),
+        supabase.from('matches').select('id, current_players').gte('match_date', sevenDaysAgo),
+      ]);
+      setLeaderboard(lbData || []);
+      setActivePlayers(apData || []);
+      if (weekMatchData) {
+        const totalGoals = (weekMatchData || []).reduce((s, m) => s + (m.current_players || 0), 0);
+        const totalPlayers = (weekMatchData || []).reduce((s, m) => s + (m.current_players || 0), 0);
+        setWeeklyStats({ matches: weekMatchData.length, goals: totalGoals, players: totalPlayers });
+      }
+    } catch (_) {}
+    setExtraLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); fetchExtraData(); }, [fetchData, fetchExtraData]);
 
   useEffect(() => {
     if (!profile) return;
@@ -246,6 +306,20 @@ export default function HomeScreen({ navigation }) {
           }]} />
         </View>
         <Text style={styles.xpText}>Amatör → Pro: {matchesLeft} maç kaldı</Text>
+      </View>
+
+      {/* ── Branch + Şehir Filtre ── */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity style={[styles.filterChip, selectedBranch && styles.filterChipActive]} onPress={() => setShowBranchPicker(true)}>
+          <Text style={styles.filterChipIcon}>⚽</Text>
+          <Text style={styles.filterChipText}>{selectedBranch || 'Futbol'}</Text>
+          <Text style={styles.filterChipArrow}>▾</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.filterChip, selectedCity && styles.filterChipActive]} onPress={() => setShowCityPicker(true)}>
+          <Text style={styles.filterChipIcon}>📍</Text>
+          <Text style={styles.filterChipText}>{selectedCity || 'Bursa'}</Text>
+          <Text style={styles.filterChipArrow}>▾</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -338,24 +412,178 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.seeAll}>Tümü →</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={venues}
-              keyExtractor={item => item.id?.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.matchScroll}
-              renderItem={({ item }) => (
+            <View style={styles.venueListWrap}>
+              {venues.map(item => (
                 <VenueCard
+                  key={item.id?.toString()}
                   venue={item}
                   onPress={() => navigation.navigate('VenueDetail', { venueId: item.id, venue: item })}
                 />
-              )}
-            />
+              ))}
+            </View>
           </>
+        )}
+
+        {/* ── Bu Hafta ── */}
+        <View style={styles.weeklyCard}>
+          <Text style={styles.weeklyTitle}>📊 BU HAFTA</Text>
+          {extraLoading ? (
+            <ActivityIndicator color="#00D4FF" size="small" style={{ marginTop: 8 }} />
+          ) : (
+            <View style={styles.weeklyRow}>
+              <View style={styles.weeklyStat}>
+                <Text style={styles.weeklyNum}>{weeklyStats.matches}</Text>
+                <Text style={styles.weeklyLabel}>maç oynandı</Text>
+              </View>
+              <View style={styles.weeklyDivider} />
+              <View style={styles.weeklyStat}>
+                <Text style={styles.weeklyNum}>{weeklyStats.goals}</Text>
+                <Text style={styles.weeklyLabel}>katılım</Text>
+              </View>
+              <View style={styles.weeklyDivider} />
+              <View style={styles.weeklyStat}>
+                <Text style={styles.weeklyNum}>{weeklyStats.players}</Text>
+                <Text style={styles.weeklyLabel}>oyuncu sayısı</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* ── Liderlik Tablosu ── */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>🏆 LİDERLİK TABLOSU</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Discover')}>
+            <Text style={styles.seeAll}>Tümünü Gör →</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.leaderboardWrap}>
+          {extraLoading ? (
+            <ActivityIndicator color="#00D4FF" style={{ margin: 16 }} />
+          ) : leaderboard.length === 0 ? (
+            <Text style={[styles.emptyText, { marginHorizontal: 20, marginBottom: 12 }]}>Henüz veri yok</Text>
+          ) : leaderboard.map((p, i) => {
+            const r = calcRating(p);
+            const rC = ratingColor(r);
+            const RANK_COLORS = ['#FFB800', '#C0C0C0', '#CD7F32', '#8B9BB4', '#8B9BB4'];
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={styles.lbRow}
+                onPress={() => navigation.navigate('Profile', { profileId: p.id })}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.lbRank, { color: RANK_COLORS[i] || '#8B9BB4' }]}>#{i + 1}</Text>
+                <View style={[styles.lbAvatar, { backgroundColor: avatarColor(p.full_name) }]}>
+                  {p.avatar_url ? (
+                    <Image source={{ uri: p.avatar_url }} style={styles.lbAvatarImg} />
+                  ) : (
+                    <Text style={styles.lbAvatarText}>{initials(p.full_name)}</Text>
+                  )}
+                </View>
+                <View style={styles.lbInfo}>
+                  <Text style={styles.lbName} numberOfLines={1}>{p.full_name}</Text>
+                  <Text style={styles.lbPos}>{p.position || 'Oyuncu'}</Text>
+                </View>
+                <View style={styles.lbGoals}>
+                  <Text style={styles.lbGoalNum}>{p.goals || 0}</Text>
+                  <Text style={styles.lbGoalLabel}>gol</Text>
+                </View>
+                <View style={[styles.lbRating, { backgroundColor: rC + '22' }]}>
+                  <Text style={[styles.lbRatingText, { color: rC }]}>{r.toFixed(1)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Aktif Oyuncular ── */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>🔥 AKTİF OYUNCULAR</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Discover')}>
+            <Text style={styles.seeAll}>Tümü →</Text>
+          </TouchableOpacity>
+        </View>
+        {extraLoading ? (
+          <ActivityIndicator color="#00D4FF" style={{ marginLeft: 20, marginBottom: 12 }} />
+        ) : activePlayers.length === 0 ? (
+          <View style={styles.emptyHorizontal}>
+            <Text style={styles.emptyText}>Henüz aktif oyuncu yok</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={activePlayers}
+            keyExtractor={item => item.id?.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.matchScroll}
+            renderItem={({ item }) => {
+              const r = calcRating(item);
+              const rC = ratingColor(r);
+              return (
+                <TouchableOpacity
+                  style={styles.playerCard}
+                  onPress={() => navigation.navigate('Profile', { profileId: item.id })}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.playerAvatar, { backgroundColor: avatarColor(item.full_name) }]}>
+                    {item.avatar_url ? (
+                      <Image source={{ uri: item.avatar_url }} style={styles.playerAvatarImg} />
+                    ) : (
+                      <Text style={styles.playerAvatarText}>{initials(item.full_name)}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.playerName} numberOfLines={1}>{(item.full_name || '').split(' ')[0]}</Text>
+                  <Text style={styles.playerPos}>{item.position || '—'}</Text>
+                  <View style={[styles.playerRating, { backgroundColor: rC + '22' }]}>
+                    <Text style={[styles.playerRatingText, { color: rC }]}>{r.toFixed(1)}</Text>
+                  </View>
+                  <Text style={styles.playerMatches}>{item.matches_played || 0} maç</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
         )}
 
         <View style={{ height: Math.max(insets.bottom, 12) + 90 }} />
       </ScrollView>
+
+      {/* ── Branch Picker Modal ── */}
+      {showBranchPicker && (
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowBranchPicker(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Branş Seç</Text>
+            {BRANCHES.map(b => (
+              <TouchableOpacity
+                key={b}
+                style={[styles.pickerItem, selectedBranch === b && styles.pickerItemActive]}
+                onPress={() => { setSelectedBranch(b); setShowBranchPicker(false); }}
+              >
+                <Text style={[styles.pickerItemText, selectedBranch === b && styles.pickerItemTextActive]}>⚽ {b}</Text>
+                {selectedBranch === b && <Text style={styles.pickerCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* ── City Picker Modal ── */}
+      {showCityPicker && (
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowCityPicker(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Şehir Seç</Text>
+            {CITIES.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.pickerItem, selectedCity === c && styles.pickerItemActive]}
+                onPress={() => { setSelectedCity(c); setShowCityPicker(false); }}
+              >
+                <Text style={[styles.pickerItemText, selectedCity === c && styles.pickerItemTextActive]}>📍 {c}</Text>
+                {selectedCity === c && <Text style={styles.pickerCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* ── Tab Bar ── */}
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -477,19 +705,58 @@ const styles = StyleSheet.create({
   joinBtn:       { borderRadius: 8, paddingVertical: 6, alignItems: 'center', marginTop: 4 },
   joinBtnText:   { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
-  venueCard:     {
-    width: 160, marginRight: 12, borderRadius: 14, overflow: 'hidden',
+  venueListWrap: { paddingHorizontal: 20 },
+  venueCardNew: {
     backgroundColor: '#0F1E35',
-    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,212,255,0.12)',
+    overflow: 'hidden',
   },
-  venueCardTop:  { height: 80, justifyContent: 'center', alignItems: 'center' },
-  venueCardEmoji:{ fontSize: 32 },
-  venueCardRating:{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  venueCardRatingText:{ color: '#FFB800', fontSize: 10, fontWeight: '700' },
-  venueCardBody: { padding: 10 },
-  venueCardName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
-  venueCardDistrict:{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 4 },
-  venueCardPrice:{ fontSize: 13, fontWeight: '800', color: '#FFB800' },
+  venuePhotoArea: {
+    height: 180,
+    position: 'relative',
+  },
+  venuePhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  venuePhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  venuePhotoEmoji: { fontSize: 48, marginBottom: 8 },
+  venuePhotoText: { color: 'rgba(255,255,255,0.3)', fontSize: 14, fontWeight: '600' },
+  venueRatingBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  venueRatingText: { color: '#FFB800', fontSize: 13, fontWeight: '700' },
+  venuePremiumBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  venuePremiumText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  venueInfoArea: { padding: 14 },
+  venueCardName: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  venueCardLocation: { color: '#8B9BB4', fontSize: 12, marginBottom: 10 },
+  venueCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  venueCardPrice: { color: '#FFB800', fontSize: 15, fontWeight: '800' },
+  venueCardBtn: { backgroundColor: 'rgba(0,212,255,0.1)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)' },
+  venueCardBtnText: { color: '#00D4FF', fontSize: 12, fontWeight: '600' },
 
   emptyHorizontal:{ paddingHorizontal: 20, paddingBottom: 8 },
   emptyText:     { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
@@ -535,4 +802,58 @@ const styles = StyleSheet.create({
   seekingPosBadgeText:  { fontSize: 9, fontWeight: '700', color: '#FFB800' },
   seekingCardBtn:       { backgroundColor: '#FFB800', borderRadius: 8, paddingVertical: 6, alignItems: 'center', marginTop: 2 },
   seekingCardBtnText:   { color: '#0A1628', fontSize: 11, fontWeight: '800' },
+
+  // Filter row
+  filterRow:         { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 10, gap: 10, backgroundColor: '#0A1628' },
+  filterChip:        { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0F1E35', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(0,212,255,0.18)' },
+  filterChipActive:  { borderColor: '#00D4FF', backgroundColor: 'rgba(0,212,255,0.08)' },
+  filterChipIcon:    { fontSize: 14 },
+  filterChipText:    { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  filterChipArrow:   { color: '#00D4FF', fontSize: 11 },
+
+  // Picker modal
+  pickerOverlay:     { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', zIndex: 999 },
+  pickerSheet:       { backgroundColor: '#0F1E35', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  pickerTitle:       { color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginBottom: 16 },
+  pickerItem:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  pickerItemActive:  { backgroundColor: 'rgba(0,212,255,0.06)', marginHorizontal: -24, paddingHorizontal: 24 },
+  pickerItemText:    { color: 'rgba(255,255,255,0.65)', fontSize: 15, fontWeight: '600' },
+  pickerItemTextActive:{ color: '#00D4FF' },
+  pickerCheck:       { color: '#00D4FF', fontSize: 16, fontWeight: '800' },
+
+  // Liderlik tablosu
+  leaderboardWrap:   { marginHorizontal: 16, backgroundColor: '#0F1E35', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  lbRow:             { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, gap: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  lbRank:            { fontSize: 13, fontWeight: '900', width: 28, textAlign: 'center' },
+  lbAvatar:          { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  lbAvatarImg:       { width: '100%', height: '100%' },
+  lbAvatarText:      { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  lbInfo:            { flex: 1 },
+  lbName:            { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  lbPos:             { color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 1 },
+  lbGoals:           { alignItems: 'center' },
+  lbGoalNum:         { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  lbGoalLabel:       { color: 'rgba(255,255,255,0.3)', fontSize: 9, letterSpacing: 1 },
+  lbRating:          { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 6 },
+  lbRatingText:      { fontSize: 12, fontWeight: '800' },
+
+  // Aktif oyuncular
+  playerCard:        { width: 90, marginRight: 12, alignItems: 'center', backgroundColor: '#0F1E35', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)', gap: 4 },
+  playerAvatar:      { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 4 },
+  playerAvatarImg:   { width: '100%', height: '100%' },
+  playerAvatarText:  { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  playerName:        { color: '#FFFFFF', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  playerPos:         { color: 'rgba(255,255,255,0.35)', fontSize: 9, textAlign: 'center' },
+  playerRating:      { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  playerRatingText:  { fontSize: 11, fontWeight: '800' },
+  playerMatches:     { color: 'rgba(255,255,255,0.25)', fontSize: 9 },
+
+  // Bu hafta
+  weeklyCard:        { marginHorizontal: 16, marginTop: 20, backgroundColor: '#0F1E35', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  weeklyTitle:       { color: '#00D4FF', fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 12 },
+  weeklyRow:         { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  weeklyStat:        { alignItems: 'center' },
+  weeklyNum:         { color: '#FFFFFF', fontSize: 24, fontWeight: '900' },
+  weeklyLabel:       { color: 'rgba(255,255,255,0.35)', fontSize: 10, marginTop: 2 },
+  weeklyDivider:     { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.08)' },
 });
