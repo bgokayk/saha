@@ -189,12 +189,14 @@ export default function ProfileScreen({ navigation, route }) {
   }
 
   async function handlePickPhoto() {
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('İzin Gerekli', 'Fotoğraf seçmek için galeri iznine ihtiyaç var.');
-        return;
-      }
+    if (Platform.OS === 'web') {
+      Alert.alert('Bilgi', 'Fotoğraf yükleme mobil uygulamadan yapılabilir.');
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('İzin Gerekli', 'Fotoğraf seçmek için galeri iznine ihtiyaç var.');
+      return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],

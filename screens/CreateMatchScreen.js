@@ -143,7 +143,14 @@ export default function CreateMatchScreen({ navigation, route }) {
   }
 
   async function handleShare() {
-    const msg = `⚽ ${venue?.name} — ${format} maçına davetlisin!\n📅 ${date} ${time}`;
+    const spotsLeft = maxPlayers;
+    const msg =
+      `⚽ Maça davetlisin!\n\n` +
+      `🏟️ ${venue?.name || 'Halı Saha'}\n` +
+      `📅 ${date} ${time}\n` +
+      `⚽ ${format} · ${spotsLeft} oyuncu\n` +
+      (price ? `💳 ${Math.ceil(parseInt(price) / (spotsLeft / 2))}₺/kişi\n` : '') +
+      `\nSAHA uygulamasını indir!`;
     if (Platform.OS === 'web') {
       Alert.alert('Maç Bilgileri', msg);
       return;

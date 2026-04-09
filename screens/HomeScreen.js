@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, ActivityIndicator, Platform, Alert, Animated
+  TouchableOpacity, ActivityIndicator, Platform, Alert, Animated, Share
 } from 'react-native';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +31,24 @@ function hoursFromNow(iso) {
   return `${Math.round(h / 24)} gün sonra`;
 }
 
+async function shareMatch(match) {
+  const date = match.match_date ? new Date(match.match_date) : null;
+  const dateStr = date
+    ? `${date.toLocaleDateString('tr-TR')} ${date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`
+    : '';
+  const spotsLeft = (match.max_players || 10) - (match.current_players || 0);
+  const msg =
+    `⚽ Maça davetlisin!\n\n` +
+    `🏟️ ${match.venues?.name || 'Halı Saha'}\n` +
+    `📅 ${dateStr}\n` +
+    `⚽ ${match.format} · ${spotsLeft > 0 ? `${spotsLeft} yer kaldı` : 'Dolu'}\n\n` +
+    `SAHA uygulamasını indir!`;
+  if (Platform.OS === 'web') { Alert.alert('Maç Bilgileri', msg); return; }
+  try {
+    await Share.share({ message: msg });
+  } catch (_) {}
+}
+
 function MatchCard({ match, onPress }) {
   const maxP = match.max_players ?? 10;
   const curP = match.current_players ?? 0;
@@ -48,6 +66,13 @@ function MatchCard({ match, onPress }) {
             <Text style={[styles.fmtBadgeText, { color: fmtColor }]}>{match.format || '5v5'}</Text>
           </View>
           {timeLabel && <Text style={styles.matchTime}>{timeLabel}</Text>}
+          <TouchableOpacity
+            style={styles.matchShareBtn}
+            onPress={(e) => { e.stopPropagation?.(); shareMatch(match); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.matchShareIcon}>📤</Text>
+          </TouchableOpacity>
         </View>
         <Text style={styles.matchVenue} numberOfLines={1}>{match.venues?.name || 'Saha'}</Text>
         <Text style={styles.matchDistrict}>📍 {match.venues?.district || 'Bursa'}</Text>
@@ -113,7 +138,7 @@ function VenueCard({ venue, onPress }) {
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, checkMatchReminders } = useNotifications();
   const [profile, setProfile]   = useState(null);
   const [matches, setMatches]   = useState([]);
   const [venues,  setVenues]    = useState([]);
@@ -138,6 +163,7 @@ export default function HomeScreen({ navigation }) {
       setMatches(matchData || []);
       setVenues(venueData || []);
       setSeekingMatches(seekingData || []);
+      checkMatchReminders();
     } catch (err) {
       console.warn('fetchData error:', err);
       Alert.alert('Hata', 'Veriler yüklenirken bir sorun oluştu.');
@@ -441,7 +467,9 @@ const styles = StyleSheet.create({
   matchTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fmtBadge:      { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
   fmtBadgeText:  { fontSize: 10, fontWeight: '700' },
-  matchTime:     { fontSize: 9, color: 'rgba(255,255,255,0.4)' },
+  matchTime:     { fontSize: 9, color: 'rgba(255,255,255,0.4)', flex: 1 },
+  matchShareBtn: { padding: 2 },
+  matchShareIcon:{ fontSize: 12 },
   matchVenue:    { fontSize: 13, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
   matchDistrict: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
   matchBarBg:    { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginTop: 4 },

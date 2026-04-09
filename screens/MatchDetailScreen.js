@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Platform
+  ActivityIndicator, Alert, Platform, Share, Linking
 } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -117,6 +117,37 @@ export default function MatchDetailScreen({ navigation, route }) {
     ]);
   }
 
+  async function handleShare() {
+    if (!match) return;
+    const date = match.match_date ? new Date(match.match_date) : null;
+    const dateStr = date
+      ? `${date.toLocaleDateString('tr-TR')} ${date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`
+      : '';
+    const spotsLeft = (match.max_players || 10) - (match.current_players || 0);
+    const msg =
+      `⚽ Maça davetlisin!\n\n` +
+      `🏟️ ${match.venues?.name || 'Halı Saha'}\n` +
+      `📅 ${dateStr}\n` +
+      `⚽ ${match.format} · ${spotsLeft > 0 ? `${spotsLeft} yer kaldı` : 'Dolu'}\n\n` +
+      `SAHA uygulamasını indir!`;
+    if (Platform.OS === 'web') { Alert.alert('Maç Bilgileri', msg); return; }
+    try {
+      await Share.share({ message: msg });
+    } catch (_) {}
+  }
+
+  function handleShareWhatsApp() {
+    if (!match) return;
+    const date = match.match_date ? new Date(match.match_date) : null;
+    const dateStr = date ? date.toLocaleDateString('tr-TR') : '';
+    const msg = encodeURIComponent(
+      `⚽ Maça gel! ${match.venues?.name || 'Halı Saha'} - ${dateStr} ${match.format}`
+    );
+    Linking.openURL(`whatsapp://send?text=${msg}`).catch(() => {
+      Alert.alert('WhatsApp Bulunamadı', 'WhatsApp yüklü değil.');
+    });
+  }
+
   if (loading) {
     return (
       <View style={[styles.loadWrap, { paddingTop: insets.top }]}>
@@ -228,6 +259,26 @@ export default function MatchDetailScreen({ navigation, route }) {
             })}
           </View>
         </View>
+
+        {/* Paylaşım butonları */}
+        <View style={styles.shareRow}>
+          <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
+            <Text style={styles.shareBtnText}>Davet Et 📤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.whatsappBtn} onPress={handleShareWhatsApp}>
+            <Text style={styles.whatsappBtnText}>WhatsApp'a Gönder</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Market butonu */}
+        {(match.status === 'open' || isJoined) && (
+          <TouchableOpacity
+            style={styles.marketBtn}
+            onPress={() => navigation.navigate('Market', { venueId: match.venue_id, matchId: matchId })}
+          >
+            <Text style={styles.marketBtnText}>🛒 Market</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Saha kartı */}
         {match.venues && (
@@ -347,6 +398,14 @@ const styles = StyleSheet.create({
   playerRating: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   playerRatingText: { fontSize: 10, fontWeight: '800' },
   playerEmptyText: { fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
+
+  shareRow:      { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 12 },
+  shareBtn:      { flex: 1, backgroundColor: 'rgba(0,212,255,0.1)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)' },
+  shareBtnText:  { color: '#00D4FF', fontSize: 13, fontWeight: '700' },
+  whatsappBtn:   { flex: 1, backgroundColor: 'rgba(37,211,102,0.1)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(37,211,102,0.3)' },
+  whatsappBtnText: { color: '#25D366', fontSize: 13, fontWeight: '700' },
+  marketBtn:     { marginHorizontal: 16, marginBottom: 12, backgroundColor: 'rgba(255,184,0,0.1)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,184,0,0.3)' },
+  marketBtnText: { color: '#FFB800', fontSize: 13, fontWeight: '700' },
 
   venueCard:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0F1E35', marginHorizontal: 16, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
   venueCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
