@@ -7,18 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
 const PACKAGES = [
-  { amount: 50,  label: '50₺',  bonus: null,     popular: false },
-  { amount: 100, label: '100₺', bonus: '+10₺',   popular: true  },
-  { amount: 200, label: '200₺', bonus: '+30₺',   popular: false },
-  { amount: 500, label: '500₺', bonus: '+100₺',  popular: false },
-];
-
-const MOCK_TRANSACTIONS = [
-  { id: 1, type: 'in',  icon: '⬆️', desc: 'Bakiye yükleme',      amount: 100, date: '2026-04-04' },
-  { id: 2, type: 'out', icon: '⚽', desc: 'Çarşamba 7v7 — Uludağ Saha', amount: -45, date: '2026-04-03' },
-  { id: 3, type: 'out', icon: '⚽', desc: 'Pazar 5v5 — Nilüfer Park',   amount: -30, date: '2026-03-30' },
-  { id: 4, type: 'in',  icon: '⬆️', desc: 'Bakiye yükleme',      amount: 200, date: '2026-03-28' },
-  { id: 5, type: 'out', icon: '⚽', desc: 'Cuma 8v8 — Görükle Saha',    amount: -55, date: '2026-03-25' },
+  { amount: 50,  label: '50₺',  bonus: null,    popular: false },
+  { amount: 100, label: '100₺', bonus: '+10₺',  popular: true  },
+  { amount: 200, label: '200₺', bonus: '+30₺',  popular: false },
+  { amount: 500, label: '500₺', bonus: '+100₺', popular: false },
 ];
 
 const PREMIUM_FEATURES = [
@@ -31,66 +23,54 @@ const PREMIUM_FEATURES = [
 
 export default function WalletScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [balance, setBalance]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [selected, setSelected] = useState(null);
-  const [isPremium, setIsPremium] = useState(false);
-
+  const [balance, setBalance]       = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [selected, setSelected]     = useState(null);
+  const [isPremium, setIsPremium]   = useState(false);
+  const [orders, setOrders]         = useState([]);
   const balanceAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    loadWallet();
-  }, []);
+  useEffect(() => { loadWallet(); }, []);
 
   async function loadWallet() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { return; }
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('wallet_balance, is_premium')
-      .eq('id', user.id)
-      .single();
+      const [{ data: prof }, { data: orderData }] = await Promise.all([
+        supabase.from('profiles').select('wallet_balance, is_premium').eq('id', user.id).single(),
+        supabase.from('market_orders')
+          .select('id, total, status, created_at, items')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ]);
 
-    const bal = data?.wallet_balance ?? 0;
-    setBalance(bal);
-    setIsPremium(data?.is_premium ?? false);
-    setLoading(false);
+      const bal = prof?.wallet_balance ?? 0;
+      setBalance(bal);
+      setIsPremium(prof?.is_premium ?? false);
+      setOrders(orderData || []);
 
-    // Bakiye sayaç animasyonu
-    Animated.timing(balanceAnim, {
-      toValue: bal,
-      duration: 900,
-      useNativeDriver: false,
-    }).start();
+      Animated.timing(balanceAnim, { toValue: bal, duration: 900, useNativeDriver: false }).start();
+    } catch (e) {
+      console.error('loadWallet error:', e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleTopUp() {
-    if (!selected) {
-      Alert.alert('Paket Seç', 'Lütfen bir yükleme paketi seçin.');
-      return;
-    }
+    if (!selected) { Alert.alert('Paket Seç', 'Lütfen bir yükleme paketi seçin.'); return; }
     const pkg = PACKAGES.find(p => p.amount === selected);
-    Alert.alert(
-      'Ödeme',
-      `${pkg.label}${pkg.bonus ? ` (${pkg.bonus} bonus)` : ''} paket için ödeme sayfasına yönlendirileceksin.\n\nBu özellik yakında iyzico entegrasyonu ile aktif olacak.`,
-      [{ text: 'Tamam' }]
-    );
+    Alert.alert('Ödeme', `${pkg.label}${pkg.bonus ? ` (${pkg.bonus} bonus)` : ''} paketi için ödeme sistemi yakında iyzico entegrasyonu ile aktif olacak.`, [{ text: 'Tamam' }]);
   }
 
   function handlePremium() {
-    Alert.alert(
-      '⭐ Premium Üyelik',
-      'Premium üyelik için ödeme sistemi yakında aktif olacak.',
-      [{ text: 'Tamam' }]
-    );
+    Alert.alert('⭐ Premium Üyelik', 'Premium üyelik için ödeme sistemi yakında aktif olacak.', [{ text: 'Tamam' }]);
   }
-
-  const displayBalance = loading ? '—' : `${balance ?? 0}₺`;
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Geri</Text>
@@ -105,21 +85,21 @@ export default function WalletScreen({ navigation }) {
         <View style={styles.balanceCard}>
           <View style={styles.balanceDecor1} />
           <View style={styles.balanceDecor2} />
-          <Text style={styles.balanceLabel}>Mevcut Bakiye</Text>
+          <Text style={styles.balanceLabel}>SAHA CÜZDANı</Text>
           {loading
-            ? <ActivityIndicator color="#FFFFFF" size="large" style={{ marginVertical: 12 }} />
-            : <Text style={styles.balanceAmount}>{displayBalance}</Text>
+            ? <ActivityIndicator color="#00D4FF" size="large" style={{ marginVertical: 12 }} />
+            : <Text style={styles.balanceAmount}>{balance ?? 0}₺</Text>
           }
           <View style={styles.balanceActions}>
             <TouchableOpacity style={styles.balanceActionBtn} onPress={() => setSelected(100)}>
               <Text style={styles.balanceActionIcon}>⬆️</Text>
               <Text style={styles.balanceActionText}>Yükle</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.balanceActionBtn} onPress={() => Alert.alert('Yakında', 'Para gönderme özelliği yakında eklenecek.')}>
+            <TouchableOpacity style={styles.balanceActionBtn} onPress={() => Alert.alert('Yakında', 'Para gönderme yakında eklenecek.')}>
               <Text style={styles.balanceActionIcon}>📤</Text>
               <Text style={styles.balanceActionText}>Gönder</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.balanceActionBtn} onPress={() => Alert.alert('İşlem Geçmişi', 'Detaylı geçmiş ekranı yakında gelecek.')}>
+            <TouchableOpacity style={styles.balanceActionBtn} onPress={() => Alert.alert('Yakında', 'İşlem geçmişi yakında eklenecek.')}>
               <Text style={styles.balanceActionIcon}>📋</Text>
               <Text style={styles.balanceActionText}>Geçmiş</Text>
             </TouchableOpacity>
@@ -127,7 +107,7 @@ export default function WalletScreen({ navigation }) {
         </View>
 
         {/* Bakiye Yükle */}
-        <Text style={styles.sectionTitle}>Bakiye Yükle</Text>
+        <Text style={styles.sectionTitle}>BAKİYE YÜKLE</Text>
         <View style={styles.packagesGrid}>
           {PACKAGES.map(pkg => (
             <TouchableOpacity
@@ -140,9 +120,7 @@ export default function WalletScreen({ navigation }) {
                   <Text style={styles.popularText}>Popüler</Text>
                 </View>
               )}
-              <Text style={[styles.pkgAmount, selected === pkg.amount && styles.pkgAmountActive]}>
-                {pkg.label}
-              </Text>
+              <Text style={[styles.pkgAmount, selected === pkg.amount && styles.pkgAmountActive]}>{pkg.label}</Text>
               {pkg.bonus && (
                 <View style={styles.bonusBadge}>
                   <Text style={styles.bonusText}>{pkg.bonus} bonus</Text>
@@ -154,52 +132,46 @@ export default function WalletScreen({ navigation }) {
 
         <TouchableOpacity
           style={[styles.topUpBtn, !selected && styles.topUpBtnDisabled]}
-          onPress={handleTopUp}
-          disabled={!selected}
-        >
-          <Text style={styles.topUpBtnText}>
-            {selected ? `${selected}₺ Yükle` : 'Paket Seç'}
-          </Text>
+          onPress={handleTopUp} disabled={!selected}>
+          <Text style={styles.topUpBtnText}>{selected ? `${selected}₺ Yükle` : 'Paket Seç'}</Text>
         </TouchableOpacity>
 
         {/* Premium Kart */}
         <View style={styles.premiumCard}>
           <View style={styles.premiumLeft}>
-            <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>PREMIUM</Text>
-            </View>
-            <Text style={styles.premiumTitle}>Saha Premium</Text>
-            <Text style={styles.premiumPrice}>49₺ / ay</Text>
+            <Text style={styles.premiumTitle}>SAHA PRO ✨</Text>
+            <Text style={styles.premiumPrice}>49₺/ay</Text>
             {PREMIUM_FEATURES.map((f, i) => (
               <Text key={i} style={styles.premiumFeature}>{f}</Text>
             ))}
           </View>
-          <TouchableOpacity
-            style={[styles.premiumBtn, isPremium && styles.premiumBtnActive]}
-            onPress={handlePremium}
-          >
-            <Text style={styles.premiumBtnText}>
-              {isPremium ? '✓ Aktif' : 'Başla'}
-            </Text>
+          <TouchableOpacity style={[styles.premiumBtn, isPremium && styles.premiumBtnActive]} onPress={handlePremium}>
+            <Text style={styles.premiumBtnText}>{isPremium ? '✓ Aktif' : 'Premium Ol'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* İşlem Geçmişi */}
-        <Text style={styles.sectionTitle}>Son İşlemler</Text>
-        {MOCK_TRANSACTIONS.map(tx => (
-          <View key={tx.id} style={styles.txRow}>
-            <View style={[styles.txIcon, tx.type === 'in' ? styles.txIconIn : styles.txIconOut]}>
-              <Text style={styles.txIconText}>{tx.icon}</Text>
-            </View>
-            <View style={styles.txInfo}>
-              <Text style={styles.txDesc}>{tx.desc}</Text>
-              <Text style={styles.txDate}>{tx.date}</Text>
-            </View>
-            <Text style={[styles.txAmount, tx.type === 'in' ? styles.txAmountIn : styles.txAmountOut]}>
-              {tx.amount > 0 ? '+' : ''}{tx.amount}₺
-            </Text>
+        <Text style={styles.sectionTitle}>SON İŞLEMLER</Text>
+        {loading ? (
+          <ActivityIndicator color="#00D4FF" />
+        ) : orders.length === 0 ? (
+          <View style={styles.emptyTx}>
+            <Text style={styles.emptyTxText}>Henüz işlem yok</Text>
           </View>
-        ))}
+        ) : (
+          orders.map(order => (
+            <View key={order.id} style={styles.txRow}>
+              <View style={styles.txIcon}>
+                <Text style={styles.txIconText}>🛒</Text>
+              </View>
+              <View style={styles.txInfo}>
+                <Text style={styles.txDesc} numberOfLines={1}>Market Siparişi · {(order.items || []).length} ürün</Text>
+                <Text style={styles.txDate}>{new Date(order.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+              </View>
+              <Text style={styles.txAmountOut}>-{order.total}₺</Text>
+            </View>
+          ))
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -208,63 +180,71 @@ export default function WalletScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
-  header: { backgroundColor: '#001F5B', paddingTop: 12, paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText: { color: 'rgba(255,255,255,0.55)', fontSize: 14 },
+  container: { flex: 1, backgroundColor: '#0A1628' },
+  header: {
+    backgroundColor: '#0A1628', paddingBottom: 16, paddingHorizontal: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)',
+  },
+  backText:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   scroll: { paddingHorizontal: 20, paddingTop: 20 },
 
-  // Bakiye kartı
-  balanceCard: { backgroundColor: '#001F5B', borderRadius: 24, padding: 24, marginBottom: 24, overflow: 'hidden', position: 'relative' },
-  balanceDecor1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(0,160,210,0.08)', top: -60, right: -40 },
-  balanceDecor2: { position: 'absolute', width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(201,168,76,0.06)', bottom: -30, left: -20 },
-  balanceLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', letterSpacing: 1, marginBottom: 8 },
-  balanceAmount: { color: '#FFFFFF', fontSize: 48, fontWeight: '800', marginBottom: 24, letterSpacing: -1 },
-  balanceActions: { flexDirection: 'row', gap: 12 },
-  balanceActionBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  balanceActionIcon: { fontSize: 18 },
-  balanceActionText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
+  balanceCard: {
+    backgroundColor: '#0F1E35', borderRadius: 20, padding: 24, marginBottom: 24,
+    overflow: 'hidden', position: 'relative',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
+  },
+  balanceDecor1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(0,212,255,0.04)', top: -60, right: -40 },
+  balanceDecor2: { position: 'absolute', width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(255,184,0,0.03)', bottom: -30, left: -20 },
+  balanceLabel:  { color: '#00D4FF', fontSize: 10, fontWeight: '600', letterSpacing: 3, marginBottom: 8 },
+  balanceAmount: { color: '#FFFFFF', fontSize: 52, fontWeight: '900', marginBottom: 20, letterSpacing: -1 },
+  balanceActions:   { flexDirection: 'row', gap: 10 },
+  balanceActionBtn: { flex: 1, backgroundColor: 'rgba(0,212,255,0.08)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  balanceActionIcon:{ fontSize: 18 },
+  balanceActionText:{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
 
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#001F5B', marginBottom: 14, marginTop: 4 },
+  sectionTitle: { fontSize: 10, fontWeight: '700', color: '#00D4FF', marginBottom: 12, marginTop: 4, letterSpacing: 2 },
 
-  // Paketler
   packagesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  pkgCard: { width: '47%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 18, alignItems: 'center', borderWidth: 2, borderColor: '#E2E8F0', shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, position: 'relative', overflow: 'hidden' },
-  pkgCardActive: { borderColor: '#00A0D2', backgroundColor: '#E8F4FB' },
-  pkgCardPopular: { borderColor: '#C9A84C' },
-  popularBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#C9A84C', paddingHorizontal: 8, paddingVertical: 3, borderBottomLeftRadius: 10 },
-  popularText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800' },
-  pkgAmount: { fontSize: 26, fontWeight: '800', color: '#001F5B', marginBottom: 6 },
-  pkgAmountActive: { color: '#00A0D2' },
-  bonusBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
-  bonusText: { color: '#059669', fontSize: 11, fontWeight: '700' },
+  pkgCard: {
+    width: '47%', backgroundColor: '#0F1E35', borderRadius: 14, padding: 18, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.15)', position: 'relative', overflow: 'hidden',
+  },
+  pkgCardActive:   { borderColor: '#00D4FF', backgroundColor: 'rgba(0,212,255,0.1)' },
+  pkgCardPopular:  { borderColor: '#FFB800' },
+  popularBadge:    { position: 'absolute', top: 0, right: 0, backgroundColor: '#FFB800', paddingHorizontal: 8, paddingVertical: 3, borderBottomLeftRadius: 10 },
+  popularText:     { color: '#0A1628', fontSize: 9, fontWeight: '800' },
+  pkgAmount:       { fontSize: 26, fontWeight: '900', color: '#FFFFFF', marginBottom: 6 },
+  pkgAmountActive: { color: '#00D4FF' },
+  bonusBadge:      { backgroundColor: 'rgba(0,224,150,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+  bonusText:       { color: '#00E096', fontSize: 11, fontWeight: '700' },
 
-  topUpBtn: { backgroundColor: '#00A0D2', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginBottom: 24, shadowColor: '#00A0D2', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-  topUpBtnDisabled: { backgroundColor: '#94A3B8', shadowOpacity: 0 },
-  topUpBtnText: { color: '#001F5B', fontSize: 16, fontWeight: '800' },
+  topUpBtn:         { backgroundColor: '#00D4FF', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginBottom: 24 },
+  topUpBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  topUpBtnText:     { color: '#0A1628', fontSize: 16, fontWeight: '800' },
 
-  // Premium
-  premiumCard: { backgroundColor: '#001F5B', borderRadius: 20, padding: 20, marginBottom: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderWidth: 1, borderColor: '#C9A84C' },
-  premiumLeft: { flex: 1 },
-  premiumBadge: { backgroundColor: '#C9A84C', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, marginBottom: 8 },
-  premiumBadgeText: { color: '#001F5B', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  premiumTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: 2 },
-  premiumPrice: { color: '#C9A84C', fontSize: 22, fontWeight: '800', marginBottom: 12 },
-  premiumFeature: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 4 },
-  premiumBtn: { backgroundColor: '#C9A84C', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, marginLeft: 12 },
-  premiumBtnActive: { backgroundColor: '#22C55E' },
-  premiumBtnText: { color: '#001F5B', fontSize: 14, fontWeight: '800' },
+  premiumCard: {
+    backgroundColor: '#0F1E35', borderRadius: 18, padding: 20, marginBottom: 24,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
+    borderWidth: 1, borderColor: '#FFB800',
+  },
+  premiumLeft:     { flex: 1 },
+  premiumTitle:    { color: '#FFB800', fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  premiumPrice:    { color: '#FFFFFF', fontSize: 24, fontWeight: '900', marginBottom: 12 },
+  premiumFeature:  { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 3 },
+  premiumBtn:      { backgroundColor: '#FFB800', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, marginLeft: 12 },
+  premiumBtnActive:{ backgroundColor: '#00E096' },
+  premiumBtnText:  { color: '#0A1628', fontSize: 12, fontWeight: '800' },
 
-  // İşlemler
-  txRow: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  txIcon: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
-  txIconIn: { backgroundColor: '#D1FAE5' },
-  txIconOut: { backgroundColor: '#EFF6FF' },
+  txRow:      { backgroundColor: '#0F1E35', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(0,212,255,0.08)' },
+  txIcon:     { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,212,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   txIconText: { fontSize: 18 },
-  txInfo: { flex: 1 },
-  txDesc: { color: '#001F5B', fontSize: 13, fontWeight: '600', marginBottom: 2 },
-  txDate: { color: '#94A3B8', fontSize: 11 },
-  txAmount: { fontSize: 15, fontWeight: '800' },
-  txAmountIn: { color: '#059669' },
-  txAmountOut: { color: '#001F5B' },
+  txInfo:     { flex: 1 },
+  txDesc:     { color: '#FFFFFF', fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  txDate:     { color: 'rgba(255,255,255,0.35)', fontSize: 11 },
+  txAmountOut:{ fontSize: 14, fontWeight: '800', color: '#FF4757' },
+
+  emptyTx:     { paddingVertical: 24, alignItems: 'center' },
+  emptyTxText: { color: 'rgba(255,255,255,0.3)', fontSize: 13 },
 });

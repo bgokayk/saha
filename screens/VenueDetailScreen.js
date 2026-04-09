@@ -49,24 +49,29 @@ export default function VenueDetailScreen({ navigation, route }) {
 
   async function load(id) {
     setLoading(true);
-    const [{ data: v }, { data: f }, { data: r }] = await Promise.all([
-      supabase.from('venues').select('*').eq('id', id).single(),
-      supabase.from('venue_features').select('*').eq('venue_id', id).maybeSingle(),
-      supabase
-        .from('match_ratings')
-        .select('*, profiles(full_name, avatar_url)')
-        .eq('venue_id', id)
-        .order('created_at', { ascending: false })
-        .limit(20),
-    ]);
-    if (v) setVenue(v);
-    setFeatures(f || {});
-    setRatings(r || []);
-    if (r && r.length > 0) {
-      const avg = r.reduce((s, x) => s + (x.overall_rating || x.rating || 0), 0) / r.length;
-      setAvgRating(avg.toFixed(1));
+    try {
+      const [{ data: v }, { data: f }, { data: r }] = await Promise.all([
+        supabase.from('venues').select('*').eq('id', id).single(),
+        supabase.from('venue_features').select('*').eq('venue_id', id).maybeSingle(),
+        supabase
+          .from('match_ratings')
+          .select('*, profiles(full_name, avatar_url)')
+          .eq('venue_id', id)
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ]);
+      if (v) setVenue(v);
+      setFeatures(f || {});
+      setRatings(r || []);
+      if (r && r.length > 0) {
+        const avg = r.reduce((s, x) => s + (x.overall_rating || x.rating || 0), 0) / r.length;
+        setAvgRating(avg.toFixed(1));
+      }
+    } catch (err) {
+      Alert.alert('Hata', 'Saha bilgileri yüklenemedi.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function openWhatsApp() {
@@ -114,7 +119,7 @@ export default function VenueDetailScreen({ navigation, route }) {
               {(avgRating || venue.rating) && (
                 <View style={styles.heroRating}>
                   <Text style={styles.heroRatingStar}>⭐</Text>
-                  <Text style={styles.heroRatingVal}>{avgRating || venue.rating?.toFixed(1)}</Text>
+                  <Text style={styles.heroRatingVal}>{avgRating || Number(venue.rating || 0).toFixed(1)}</Text>
                   <Text style={styles.heroRatingCount}>({ratings.length} yorum)</Text>
                 </View>
               )}

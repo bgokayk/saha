@@ -61,9 +61,11 @@ const FORMATIONS = {
 };
 
 
-export default function LineupScreen({ navigation }) {
+export default function LineupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [selectedFormat, setSelectedFormat] = useState('7v7');
+  const matchId = route?.params?.matchId || null;
+  const initialFormat = route?.params?.format || '7v7';
+  const [selectedFormat, setSelectedFormat] = useState(initialFormat);
   const [players, setPlayers]   = useState({});   // posId → profile obj
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPos,   setEditingPos]   = useState(null);
@@ -79,10 +81,11 @@ export default function LineupScreen({ navigation }) {
     if (search.length < 1) { setResults([]); return; }
     const timeout = setTimeout(async () => {
       setSearching(true);
+      const sanitized = search.replace(/[%_]/g, '');
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name, position, goals, assists, matches_played, avatar_url')
-        .ilike('full_name', `%${search}%`)
+        .ilike('full_name', `%${sanitized}%`)
         .limit(8);
       setResults(data || []);
       setSearching(false);
@@ -220,7 +223,7 @@ export default function LineupScreen({ navigation }) {
       {/* Alt bilgi */}
       <View style={styles.footer}>
         <Text style={styles.footerHint}>{formation.name}  ·  Boş yere dokun oyuncu ekle, dolu yere dokun kaldır</Text>
-        <TouchableOpacity style={styles.shareBtn}>
+        <TouchableOpacity style={styles.shareBtn} onPress={() => Alert.alert('Yakında', 'Bu özellik yakında eklenecek.')}>
           <Text style={styles.shareBtnText}>Paylaş 📤</Text>
         </TouchableOpacity>
       </View>

@@ -1,8 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, FlatList,
-  TouchableOpacity, ActivityIndicator, Platform, Alert
+  TouchableOpacity, ActivityIndicator, Platform, Alert, Animated
 } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
@@ -31,20 +31,16 @@ function hoursFromNow(iso) {
   return `${Math.round(h / 24)} gün sonra`;
 }
 
-function MatchCard({ match, onPress, onJoin }) {
+function MatchCard({ match, onPress }) {
   const maxP = match.max_players ?? 10;
   const curP = match.current_players ?? 0;
   const ratio = maxP ? Math.min(curP / maxP, 1) : 0;
   const fmtColor = FORMAT_COLORS[match.format] || '#3B82F6';
-  const barColor = ratio >= 0.9 ? '#EF4444' : ratio >= 0.6 ? '#F59E0B' : '#10B981';
+  const barColor = ratio >= 0.9 ? '#FF4757' : ratio >= 0.6 ? '#FFB800' : '#00E096';
   const timeLabel = hoursFromNow(match.match_date);
 
   return (
-    <TouchableOpacity
-      style={styles.matchCard}
-      onPress={() => { haptic(); onPress ? onPress() : onJoin(match); }}
-      activeOpacity={0.85}
-    >
+    <TouchableOpacity style={styles.matchCard} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.matchStrip, { backgroundColor: fmtColor }]} />
       <View style={styles.matchBody}>
         <View style={styles.matchTop}>
@@ -60,17 +56,17 @@ function MatchCard({ match, onPress, onJoin }) {
         </View>
         <Text style={styles.matchCount}>{curP}/{maxP} oyuncu</Text>
         <View style={[styles.joinBtn, { backgroundColor: fmtColor }]}>
-          <Text style={styles.joinBtnText}>Katıl →</Text>
+          <Text style={styles.joinBtnText}>Detay →</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-const VENUE_COLORS = ['#001F5B', '#0F172A', '#134E4A', '#1E1B4B', '#431407', '#0C4A6E'];
+const VENUE_COLORS = ['#0D1F3C', '#1A0F3C', '#0F2A1A', '#2A0F1A', '#1A2A0F', '#0F1A2A'];
 
 function VenueCard({ venue, onPress }) {
-  const bg = VENUE_COLORS[venue.name?.charCodeAt(0) % VENUE_COLORS.length] || '#001F5B';
+  const bg = VENUE_COLORS[venue.name?.charCodeAt(0) % VENUE_COLORS.length] || '#0D1F3C';
   return (
     <TouchableOpacity style={styles.venueCard} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.venueCardTop, { backgroundColor: bg }]}>
@@ -98,98 +94,76 @@ export default function HomeScreen({ navigation }) {
   const [venues,  setVenues]    = useState([]);
   const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('home');
+  const xpAnim = useRef(new Animated.Value(0)).current;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: prof } = await supabase
-          .from('profiles').select('*').eq('id', user.id).single();
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setProfile(prof);
       }
       const [{ data: matchData }, { data: venueData }] = await Promise.all([
-        supabase
-          .from('matches')
-          .select('*, venues(name, district, city)')
-          .eq('status', 'open')
-          .order('match_date', { ascending: true })
-          .limit(8),
-        supabase
-          .from('venues')
-          .select('*')
-          .order('rating', { ascending: false })
-          .limit(6),
+        supabase.from('matches').select('*, venues(name, district, city)').eq('status', 'open').order('match_date', { ascending: true }).limit(8),
+        supabase.from('venues').select('*').order('rating', { ascending: false }).limit(6),
       ]);
       setMatches(matchData || []);
       setVenues(venueData || []);
-    } catch (_) {}
+    } catch (err) {
+      console.warn('fetchData error:', err);
+      Alert.alert('Hata', 'Veriler yüklenirken bir sorun oluştu.');
+    }
     setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  async function handleJoin(match) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { error } = await supabase
-      .from('match_players')
-      .insert({ match_id: match.id, user_id: user.id });
-    if (error) {
-      if (error.code === '23505') {
-        Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
-      } else {
-        Alert.alert('Hata', error.message);
-      }
-      return;
-    }
-    await supabase
-      .from('matches')
-      .update({ current_players: (match.current_players || 0) + 1 })
-      .eq('id', match.id);
-    haptic('success');
-    navigation.navigate('MatchList');
-  }
+  useEffect(() => {
+    if (!profile) return;
+    const xpPct = Math.min((profile.matches_played || 0) % 10 / 10, 1);
+    Animated.timing(xpAnim, { toValue: xpPct, duration: 1000, useNativeDriver: false }).start();
+  }, [profile]);
 
   const displayName = profile?.full_name || 'Oyuncu';
   const firstName   = displayName.split(' ')[0];
-  const rating      = calcRating(profile);
+  const rating      = profile ? calcRating(profile) : 5.0;
   const rColor      = ratingColor(rating);
+  const matchesLeft = 10 - ((profile?.matches_played || 0) % 10);
 
   const STATS = [
-    { val: profile?.matches_played ?? 0, label: 'Maç',   color: '#3B82F6', bg: '#EFF6FF', icon: '🎮' },
-    { val: profile?.goals ?? 0,          label: 'Gol',   color: '#EF4444', bg: '#FEF2F2', icon: '⚽' },
-    { val: profile?.assists ?? 0,        label: 'Asist', color: '#10B981', bg: '#F0FDF4', icon: '🅰️' },
-    { val: rating.toFixed(1),            label: 'Rating', color: rColor,   bg: '#FFFBEB', icon: '⭐' },
+    { val: profile?.matches_played ?? 0, label: 'MAÇ' },
+    { val: profile?.goals ?? 0,          label: 'GOL' },
+    { val: profile?.assists ?? 0,        label: 'ASİST' },
+    { val: rating.toFixed(1),            label: 'RATING', color: rColor },
   ];
 
   const QUICK_ACTIONS = [
-    { emoji: '⚽', title: 'Maç Kur',    desc: 'Hemen başlat',  color: '#3B82F6', screen: 'CreateMatch' },
-    { emoji: '🔍', title: 'Maç Bul',    desc: 'Açık maçlar',   color: '#10B981', screen: 'MatchList'   },
+    { emoji: '⚽', title: 'Maç Kur',    desc: 'Hemen başlat',  color: '#00D4FF', screen: 'CreateMatch' },
+    { emoji: '🔍', title: 'Maç Bul',    desc: 'Açık maçlar',   color: '#00E096', screen: 'MatchList'   },
     { emoji: '👥', title: 'Oyuncu Bul', desc: 'Swipe & davet', color: '#8B5CF6', screen: 'Discover'    },
-    { emoji: '🛒', title: 'Market',     desc: 'Ekipman al',    color: '#F59E0B', screen: 'Market'      },
+    { emoji: '🛒', title: 'Market',     desc: 'Ekipman al',    color: '#FFB800', screen: 'Market'      },
   ];
 
   return (
     <View style={styles.container}>
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View>
+        <TouchableOpacity
+          style={[styles.avatarCircle, { backgroundColor: avatarColor(displayName) }]}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Text style={styles.avatarText}>{initials(displayName)}</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
           <Text style={styles.greeting}>Merhaba, {firstName} 👋</Text>
           <Text style={styles.subtitle}>Bugün maç var mı?</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.navigate('Wallet')}
-          >
-            <Text style={styles.headerIconTxt}>💳</Text>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('ChatList')}>
+            <Text style={styles.headerIconTxt}>💬</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.navigate('Notifications')}
-          >
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.headerIconTxt}>🔔</Text>
             {unreadCount > 0 && (
               <View style={styles.notifBadge}>
@@ -197,34 +171,31 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.navigate('ChatList')}
-          >
-            <Text style={styles.headerIconTxt}>💬</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.avatarCircle, { backgroundColor: avatarColor(displayName) }]}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.avatarText}>{initials(displayName)}</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      {/* ── Stat Bar ── */}
+      <View style={styles.statBar}>
+        {STATS.map((s, i) => (
+          <View key={i} style={styles.statItem}>
+            {i > 0 && <View style={styles.statDivider} />}
+            <Text style={[styles.statNum, s.color ? { color: s.color } : {}]}>{s.val}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
 
-        {/* ── Stat Kutuları ── */}
-        <View style={styles.statsRow}>
-          {STATS.map((s, i) => (
-            <View key={i} style={[styles.statBox, { backgroundColor: s.bg, borderTopColor: s.color }]}>
-              <Text style={styles.statIcon}>{s.icon}</Text>
-              <Text style={[styles.statNum, { color: s.color }]}>{s.val}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+      {/* ── XP Bar ── */}
+      <View style={styles.xpWrap}>
+        <View style={styles.xpBg}>
+          <Animated.View style={[styles.xpFill, {
+            width: xpAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+          }]} />
         </View>
+        <Text style={styles.xpText}>Amatör → Pro: {matchesLeft} maç kaldı</Text>
+      </View>
 
+      <ScrollView showsVerticalScrollIndicator={false}>
         {/* ── Hızlı Aksiyonlar ── */}
         <Text style={styles.sectionTitle}>Hızlı Aksiyonlar</Text>
         <View style={styles.qaGrid}>
@@ -235,20 +206,56 @@ export default function HomeScreen({ navigation }) {
               onPress={() => { haptic(); navigation.navigate(qa.screen); }}
               activeOpacity={0.85}
             >
-              <View style={[styles.qaEmojiWrap, { backgroundColor: qa.color + '18' }]}>
+              <View style={[styles.qaEmojiWrap, { backgroundColor: qa.color + '20' }]}>
                 <Text style={styles.qaEmoji}>{qa.emoji}</Text>
               </View>
-              <Text style={styles.qaTitle}>{qa.title}</Text>
-              <Text style={styles.qaDesc}>{qa.desc}</Text>
+              <View style={styles.qaTextWrap}>
+                <Text style={styles.qaTitle}>{qa.title}</Text>
+                <Text style={styles.qaDesc}>{qa.desc}</Text>
+              </View>
+              <Text style={styles.qaArrow}>→</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ── Yakın Sahalar ── */}
+        {/* ── Yakın Maçlar ── */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>⚡ YAKIN MAÇLAR</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('MatchList')}>
+            <Text style={styles.seeAll}>Tümü →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator color="#00D4FF" style={{ marginLeft: 20, marginBottom: 12 }} />
+        ) : matches.length === 0 ? (
+          <View style={styles.emptyHorizontal}>
+            <Text style={styles.emptyText}>⚽ Açık maç yok</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('CreateMatch')}>
+              <Text style={styles.emptyAction}>İlk maçı sen kur →</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={matches}
+            keyExtractor={item => item.id?.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.matchScroll}
+            renderItem={({ item }) => (
+              <MatchCard
+                match={item}
+                onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
+              />
+            )}
+          />
+        )}
+
+        {/* ── Bursa Sahaları ── */}
         {venues.length > 0 && (
           <>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Yakın Sahalar</Text>
+              <Text style={styles.sectionTitle}>🏟️ BURSA SAHALARI</Text>
               <TouchableOpacity onPress={() => navigation.navigate('CreateMatch')}>
                 <Text style={styles.seeAll}>Tümü →</Text>
               </TouchableOpacity>
@@ -269,51 +276,17 @@ export default function HomeScreen({ navigation }) {
           </>
         )}
 
-        {/* ── Yakın Maçlar ── */}
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Yakın Maçlar</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('MatchList')}>
-            <Text style={styles.seeAll}>Tümü →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <ActivityIndicator color="#00A0D2" style={{ marginLeft: 20, marginBottom: 12 }} />
-        ) : matches.length === 0 ? (
-          <View style={styles.emptyHorizontal}>
-            <Text style={styles.emptyText}>⚽ Açık maç yok</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('CreateMatch')}>
-              <Text style={styles.emptyAction}>İlk maçı sen kur →</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={matches}
-            keyExtractor={item => item.id?.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.matchScroll}
-            renderItem={({ item }) => (
-              <MatchCard
-                match={item}
-                onPress={() => navigation.navigate('MatchDetail', { matchId: item.id })}
-                onJoin={handleJoin}
-              />
-            )}
-          />
-        )}
-
         <View style={{ height: Math.max(insets.bottom, 12) + 90 }} />
       </ScrollView>
 
       {/* ── Tab Bar ── */}
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         {[
-          { key: 'home',     icon: '🏠', label: 'Ana',    screen: 'Home'        },
-          { key: 'discover', icon: '🔍', label: 'Keşfet', screen: 'Discover'    },
+          { key: 'home',     icon: '🏠', label: 'Ana',    screen: 'Home'     },
+          { key: 'discover', icon: '🔍', label: 'Keşfet', screen: 'Discover' },
           { key: 'fab',      icon: '+',  label: '',        screen: 'CreateMatch', isFab: true },
-          { key: 'matches',  icon: '📋', label: 'Maçlar', screen: 'MatchList'   },
-          { key: 'profile',  icon: '👤', label: 'Profil', screen: 'Profile'     },
+          { key: 'matches',  icon: '📋', label: 'Maçlar', screen: 'MatchList' },
+          { key: 'profile',  icon: '👤', label: 'Profil', screen: 'Profile'  },
         ].map(tab => {
           if (tab.isFab) {
             return (
@@ -349,86 +322,119 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
 
-  // Header
   header: {
-    backgroundColor: '#001F5B',
-    paddingBottom: 16,
+    backgroundColor: '#0A1628',
+    paddingBottom: 12,
     paddingHorizontal: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,212,255,0.12)',
   },
-  greeting:     { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
-  subtitle:     { color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 2 },
-  headerRight:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerIconBtn:{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', position: 'relative' },
-  headerIconTxt:{ fontSize: 17 },
-  notifBadge:   { position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#001F5B' },
+  headerCenter:  { flex: 1 },
+  greeting:      { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  subtitle:      { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 1 },
+  headerRight:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerIconBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  headerIconTxt: { fontSize: 17 },
+  notifBadge:    { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF4757', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#0A1628' },
   notifBadgeText:{ color: '#fff', fontSize: 8, fontWeight: '800' },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
-  avatarText:   { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  avatarCircle:  { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(0,212,255,0.3)' },
+  avatarText:    { color: '#FFF', fontSize: 15, fontWeight: '800' },
 
-  // Stats
-  statsRow:  { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, gap: 10 },
-  statBox:   { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 3, borderTopWidth: 3, backgroundColor: '#fff', shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
-  statIcon:  { fontSize: 18 },
-  statNum:   { fontSize: 20, fontWeight: '800' },
-  statLabel: { color: '#64748B', fontSize: 10, fontWeight: '600' },
+  statBar:    { flexDirection: 'row', backgroundColor: '#0A1628', paddingVertical: 12, paddingHorizontal: 20 },
+  statItem:   { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  statDivider:{ width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.1)', marginRight: 12 },
+  statNum:    { fontSize: 22, fontWeight: '900', color: '#FFFFFF', marginRight: 6 },
+  statLabel:  { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.4)', letterSpacing: 1 },
 
-  // Sections
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#001F5B', marginHorizontal: 20, marginTop: 22, marginBottom: 12 },
-  sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 22, marginBottom: 12 },
-  seeAll:       { color: '#00A0D2', fontSize: 13, fontWeight: '600' },
+  xpWrap: { paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0A1628' },
+  xpBg:   { height: 3, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginBottom: 4 },
+  xpFill: { height: 3, backgroundColor: '#00D4FF', borderRadius: 2 },
+  xpText: { color: 'rgba(255,255,255,0.3)', fontSize: 10 },
 
-  // Quick Actions
-  qaGrid:    { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
-  qaCard:    { width: '47%', backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, gap: 8, shadowColor: '#001F5B', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  qaEmojiWrap:{ width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  qaEmoji:   { fontSize: 24 },
-  qaTitle:   { fontSize: 15, fontWeight: '700', color: '#001F5B' },
-  qaDesc:    { fontSize: 11, color: '#94A3B8' },
+  sectionTitle: { fontSize: 10, fontWeight: '700', color: '#00D4FF', marginHorizontal: 20, marginTop: 20, marginBottom: 10, letterSpacing: 2 },
+  sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 20, marginBottom: 10 },
+  seeAll:       { color: '#00D4FF', fontSize: 12, fontWeight: '600' },
 
-  // Match Cards (horizontal)
-  matchScroll:   { paddingLeft: 20, paddingRight: 8, paddingBottom: 4 },
-  matchCard:     { width: 200, backgroundColor: '#FFFFFF', borderRadius: 18, marginRight: 12, overflow: 'hidden', flexDirection: 'row', shadowColor: '#001F5B', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  matchStrip:    { width: 5 },
-  matchBody:     { flex: 1, padding: 14, gap: 5 },
+  qaGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
+  qaCard: {
+    width: '47%',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16, borderWidth: 1,
+    borderColor: 'rgba(0,212,255,0.15)',
+    padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  qaEmojiWrap: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  qaEmoji:     { fontSize: 22 },
+  qaTextWrap:  { flex: 1 },
+  qaTitle:     { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  qaDesc:      { fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  qaArrow:     { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
+
+  matchScroll: { paddingLeft: 20, paddingRight: 8, paddingBottom: 4 },
+  matchCard:   {
+    width: 200, height: 160,
+    backgroundColor: '#0F1E35',
+    borderRadius: 16, marginRight: 12, overflow: 'hidden',
+    flexDirection: 'row',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
+  },
+  matchStrip:    { width: 4 },
+  matchBody:     { flex: 1, padding: 12, gap: 4 },
   matchTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fmtBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  fmtBadgeText:  { fontSize: 11, fontWeight: '700' },
-  matchTime:     { fontSize: 10, color: '#94A3B8' },
-  matchVenue:    { fontSize: 14, fontWeight: '700', color: '#001F5B' },
-  matchDistrict: { fontSize: 11, color: '#94A3B8' },
-  matchBarBg:    { height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' },
-  matchBarFg:    { height: '100%', borderRadius: 3 },
-  matchCount:    { fontSize: 10, color: '#64748B' },
-  joinBtn:       { paddingVertical: 8, borderRadius: 10, alignItems: 'center', marginTop: 2 },
-  joinBtnText:   { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  fmtBadge:      { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  fmtBadgeText:  { fontSize: 10, fontWeight: '700' },
+  matchTime:     { fontSize: 9, color: 'rgba(255,255,255,0.4)' },
+  matchVenue:    { fontSize: 13, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
+  matchDistrict: { fontSize: 10, color: 'rgba(255,255,255,0.4)' },
+  matchBarBg:    { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginTop: 4 },
+  matchBarFg:    { height: 4, borderRadius: 2 },
+  matchCount:    { fontSize: 9, color: 'rgba(255,255,255,0.4)' },
+  joinBtn:       { borderRadius: 8, paddingVertical: 6, alignItems: 'center', marginTop: 4 },
+  joinBtnText:   { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
-  // Venue Cards
-  venueCard:        { width: 140, backgroundColor: '#FFFFFF', borderRadius: 16, marginRight: 12, overflow: 'hidden', shadowColor: '#001F5B', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-  venueCardTop:     { height: 70, justifyContent: 'center', alignItems: 'center' },
-  venueCardEmoji:   { fontSize: 28 },
-  venueCardRating:  { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  venueCardRatingText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  venueCardBody:    { padding: 10, gap: 3 },
-  venueCardName:    { fontSize: 12, fontWeight: '800', color: '#001F5B' },
-  venueCardDistrict:{ fontSize: 10, color: '#94A3B8' },
-  venueCardPrice:   { fontSize: 11, fontWeight: '700', color: '#C9A84C' },
+  venueCard:     {
+    width: 160, marginRight: 12, borderRadius: 14, overflow: 'hidden',
+    backgroundColor: '#0F1E35',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
+  },
+  venueCardTop:  { height: 80, justifyContent: 'center', alignItems: 'center' },
+  venueCardEmoji:{ fontSize: 32 },
+  venueCardRating:{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  venueCardRatingText:{ color: '#FFB800', fontSize: 10, fontWeight: '700' },
+  venueCardBody: { padding: 10 },
+  venueCardName: { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
+  venueCardDistrict:{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 4 },
+  venueCardPrice:{ fontSize: 13, fontWeight: '800', color: '#FFB800' },
 
-  // Empty
-  emptyHorizontal: { marginLeft: 20, marginBottom: 8 },
-  emptyText:       { color: '#94A3B8', fontSize: 14 },
-  emptyAction:     { color: '#00A0D2', fontSize: 13, fontWeight: '600', marginTop: 4 },
+  emptyHorizontal:{ paddingHorizontal: 20, paddingBottom: 8 },
+  emptyText:     { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
+  emptyAction:   { color: '#00D4FF', fontSize: 13, marginTop: 4 },
 
-  // Tab Bar
-  tabBar:       { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', flexDirection: 'row', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F0F0F0', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 12 },
-  tabItem:      { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 4 },
-  tabIcon:      { fontSize: 20 },
-  tabLabel:     { fontSize: 10, color: '#94A3B8', fontWeight: '500' },
-  tabLabelActive:{ color: '#001F5B', fontWeight: '700' },
-  fab:          { width: 56, height: 56, backgroundColor: '#00A0D2', borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginTop: -24, shadowColor: '#00A0D2', shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 12 },
-  fabText:      { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 38 },
+  tabBar: {
+    backgroundColor: '#0A1628',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,212,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 72,
+    paddingHorizontal: 8,
+  },
+  tabItem:       { flex: 1, alignItems: 'center', paddingTop: 10 },
+  tabIcon:       { fontSize: 20, marginBottom: 2 },
+  tabLabel:      { fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: '600' },
+  tabLabelActive:{ color: '#00D4FF', fontWeight: '700' },
+  fab: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: '#00D4FF',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 8, marginHorizontal: 10,
+    shadowColor: '#00D4FF', shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  fabText: { color: '#0A1628', fontSize: 28, fontWeight: '900', marginTop: -2 },
 });

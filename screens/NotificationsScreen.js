@@ -1,10 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '../context/NotificationContext';
 
 function timeAgoShort(iso) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
+  if (m < 0) return 'Şimdi';
   if (m < 1) return 'Şimdi';
   if (m < 60) return `${m}dk`;
   const h = Math.floor(m / 60);
@@ -62,7 +63,16 @@ export default function NotificationsScreen({ navigation }) {
             </TouchableOpacity>
           ))}
           {notifications.length > 0 && (
-            <TouchableOpacity style={styles.clearBtn} onPress={clearAll}>
+            <TouchableOpacity style={styles.clearBtn} onPress={() => {
+              Alert.alert(
+                'Bildirimleri Temizle',
+                'Tüm bildirimler silinecek. Emin misin?',
+                [
+                  { text: 'İptal', style: 'cancel' },
+                  { text: 'Temizle', style: 'destructive', onPress: clearAll },
+                ]
+              );
+            }}>
               <Text style={styles.clearBtnText}>Tümünü Temizle</Text>
             </TouchableOpacity>
           )}

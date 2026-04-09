@@ -31,24 +31,43 @@ export default function LoginScreen({ navigation, route }) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-    setLoading(false);
-    if (error) {
-      const msg =
-        error.message.includes('Invalid login credentials')
-          ? 'Email veya şifre hatalı.'
-          : error.message.includes('Email not confirmed')
-          ? 'Email adresin henüz doğrulanmadı. Gelen kutunu kontrol et.'
-          : error.message;
-      Alert.alert('Giriş Başarısız', msg);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) {
+        const msg =
+          error?.message?.includes('Invalid login credentials')
+            ? 'Email veya şifre hatalı.'
+            : error?.message?.includes('Email not confirmed')
+            ? 'Email adresin henüz doğrulanmadı. Gelen kutunu kontrol et.'
+            : error?.message;
+        Alert.alert('Giriş Başarısız', msg);
+      }
+      // Başarılı girişte App.js onAuthStateChange tetiklenir → otomatik Home'a geçer
+      // Saha sahibi girişiyse VenueAdmin'e yönlendir
+      if (isVenueAdmin && !error) {
+        navigation.navigate('VenueAdmin');
+      }
+    } catch (err) {
+      Alert.alert('Hata', 'Beklenmeyen bir hata oluştu. Lütfen tekrar dene.');
+    } finally {
+      setLoading(false);
     }
-    // Başarılı girişte App.js onAuthStateChange tetiklenir → otomatik Home'a geçer
-    // Saha sahibi girişiyse VenueAdmin'e yönlendir
-    if (isVenueAdmin && !error) {
-      navigation.navigate('VenueAdmin');
+  }
+
+  async function handlePasswordReset() {
+    if (!email.trim()) {
+      Alert.alert('Email Gir', 'Lütfen önce email adresini gir.');
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+      if (error) Alert.alert('Hata', error?.message);
+      else Alert.alert('Gönderildi ✉️', 'Şifre sıfırlama bağlantısı emailine gönderildi.');
+    } catch (err) {
+      Alert.alert('Hata', 'Şifre sıfırlama isteği gönderilemedi.');
     }
   }
 
@@ -109,15 +128,7 @@ export default function LoginScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.forgotWrap} onPress={async () => {
-              if (!email.trim()) {
-                Alert.alert('Email Gir', 'Lütfen önce email adresini gir.');
-                return;
-              }
-              const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
-              if (error) Alert.alert('Hata', error.message);
-              else Alert.alert('Gönderildi ✉️', 'Şifre sıfırlama bağlantısı emailine gönderildi.');
-            }}>
+            <TouchableOpacity style={styles.forgotWrap} onPress={handlePasswordReset}>
               <Text style={styles.forgotText}>Şifremi unuttum →</Text>
             </TouchableOpacity>
           </View>

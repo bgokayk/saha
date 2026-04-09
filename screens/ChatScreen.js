@@ -1,8 +1,8 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator
+  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert
 } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
@@ -44,7 +44,10 @@ export default function ChatScreen({ navigation, route }) {
             ? `match_id=eq.${matchId}`
             : `from_user=eq.${otherId}`,
         }, (payload) => {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages(prev => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
         })
         .subscribe();
@@ -74,6 +77,16 @@ export default function ChatScreen({ navigation, route }) {
     setMessages(data || []);
     setLoading(false);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
+
+    // Mark incoming messages as read
+    if (!isMatch && otherId) {
+      supabase.from('messages')
+        .update({ read: true })
+        .eq('from_user', otherId)
+        .eq('to_user', uid)
+        .eq('read', false)
+        .then(() => {});
+    }
   }
 
   async function sendMessage() {
@@ -95,8 +108,14 @@ export default function ChatScreen({ navigation, route }) {
     }
 
     const { data, error } = await supabase.from('messages').insert(payload).select().single();
-    if (!error && data) {
-      setMessages(prev => [...prev, data]);
+    if (error) {
+      setText(content);
+      Alert.alert('Hata', 'Mesaj gönderilemedi, lütfen tekrar dene.');
+    } else if (data) {
+      setMessages(prev => {
+        if (prev.some(m => m.id === data.id)) return prev;
+        return [...prev, data];
+      });
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
@@ -113,16 +132,19 @@ export default function ChatScreen({ navigation, route }) {
   }
 
   // Mesajları gün gruplarına böl
-  const grouped = [];
-  let lastDay = null;
-  for (const m of messages) {
-    const day = new Date(m.created_at).toDateString();
-    if (day !== lastDay) {
-      grouped.push({ type: 'divider', day: m.created_at });
-      lastDay = day;
+  const grouped = useMemo(() => {
+    const result = [];
+    let lastDay = null;
+    for (const m of messages) {
+      const day = new Date(m.created_at).toDateString();
+      if (day !== lastDay) {
+        result.push({ type: 'divider', day: m.created_at });
+        lastDay = day;
+      }
+      result.push({ type: 'msg', ...m });
     }
-    grouped.push({ type: 'msg', ...m });
-  }
+    return result;
+  }, [messages]);
 
   return (
     <KeyboardAvoidingView
@@ -136,7 +158,7 @@ export default function ChatScreen({ navigation, route }) {
           <Text style={styles.backText}>← Geri</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={[styles.headerAvatar, { backgroundColor: isMatch ? '#001F5B' : '#00A0D2' }]}>
+          <View style={[styles.headerAvatar, { backgroundColor: isMatch ? '#0F1E35' : '#00D4FF' }]}>
             <Text style={styles.headerAvatarText}>{isMatch ? '⚽' : (otherName?.[0] || '?')}</Text>
           </View>
           <Text style={styles.headerName} numberOfLines={1}>{otherName || 'Sohbet'}</Text>
@@ -216,41 +238,45 @@ export default function ChatScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
+  centered:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  header: { backgroundColor: '#001F5B', paddingBottom: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backText: { color: 'rgba(255,255,255,0.55)', fontSize: 14, minWidth: 50 },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, justifyContent: 'center' },
-  headerAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  headerAvatarText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  headerName: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', maxWidth: 160 },
+  header: {
+    backgroundColor: '#0A1628', paddingBottom: 14, paddingHorizontal: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)',
+  },
+  backText:        { color: 'rgba(255,255,255,0.45)', fontSize: 14, minWidth: 50 },
+  headerCenter:    { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, justifyContent: 'center' },
+  headerAvatar:    { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  headerAvatarText:{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  headerName:      { color: '#FFFFFF', fontSize: 16, fontWeight: '700', maxWidth: 160 },
 
-  msgList: { flex: 1 },
+  msgList:    { flex: 1 },
   msgContent: { paddingHorizontal: 16, paddingTop: 16 },
 
-  emptyChat: { alignItems: 'center', paddingTop: 60 },
-  emptyChatText: { fontSize: 16, fontWeight: '700', color: '#001F5B', marginBottom: 6 },
-  emptyChatSub: { fontSize: 13, color: '#64748B', textAlign: 'center', paddingHorizontal: 20 },
+  emptyChat:    { alignItems: 'center', paddingTop: 60 },
+  emptyChatText:{ fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 },
+  emptyChatSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingHorizontal: 20 },
 
   dayDivider: { flexDirection: 'row', alignItems: 'center', marginVertical: 12, gap: 10 },
-  dayLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
-  dayText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  dayLine:    { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
+  dayText:    { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600' },
 
-  msgRow: { flexDirection: 'row', marginBottom: 4, justifyContent: 'flex-start' },
+  msgRow:   { flexDirection: 'row', marginBottom: 4, justifyContent: 'flex-start' },
   msgRowMe: { justifyContent: 'flex-end' },
 
-  bubble: { maxWidth: '75%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
-  bubbleThem: { backgroundColor: '#F1F5F9', borderBottomLeftRadius: 4 },
-  bubbleMe: { backgroundColor: '#001F5B', borderBottomRightRadius: 4 },
-  bubbleText: { fontSize: 14, color: '#1E293B', lineHeight: 20 },
-  bubbleTextMe: { color: '#FFFFFF' },
-  bubbleTime: { fontSize: 10, color: '#94A3B8', marginTop: 4, textAlign: 'right' },
-  bubbleTimeMe: { color: 'rgba(255,255,255,0.5)' },
+  bubble:      { maxWidth: '75%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  bubbleThem:  { backgroundColor: '#0F1E35', borderWidth: 1, borderColor: 'rgba(0,212,255,0.15)', borderBottomLeftRadius: 4 },
+  bubbleMe:    { backgroundColor: 'rgba(0,212,255,0.15)', borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)', borderBottomRightRadius: 4 },
+  bubbleText:  { fontSize: 14, color: '#FFFFFF', lineHeight: 20 },
+  bubbleTextMe:{ color: '#FFFFFF' },
+  bubbleTime:  { fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4, textAlign: 'right' },
+  bubbleTimeMe:{ color: 'rgba(0,212,255,0.6)' },
 
-  inputBar: { backgroundColor: '#FFFFFF', flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', alignItems: 'flex-end', gap: 10 },
-  input: { flex: 1, backgroundColor: '#F4F6F9', borderRadius: 22, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 14, color: '#1E293B', maxHeight: 100, borderWidth: 1, borderColor: '#E2E8F0' },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#001F5B', justifyContent: 'center', alignItems: 'center' },
-  sendBtnDisabled: { backgroundColor: '#94A3B8' },
-  sendBtnText: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginTop: -2 },
+  inputBar:        { backgroundColor: '#0A1628', flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,212,255,0.12)', alignItems: 'flex-end', gap: 10 },
+  input:           { flex: 1, backgroundColor: '#0F1E35', borderRadius: 22, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 14, color: '#FFFFFF', maxHeight: 100, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  sendBtn:         { width: 44, height: 44, borderRadius: 22, backgroundColor: '#00D4FF', justifyContent: 'center', alignItems: 'center' },
+  sendBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  sendBtnText:     { color: '#0A1628', fontSize: 20, fontWeight: '800', marginTop: -2 },
 });

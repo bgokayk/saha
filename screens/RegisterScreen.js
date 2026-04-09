@@ -21,30 +21,52 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert('Hata', 'Ad, email ve şifre zorunlu.');
       return;
     }
-    setLoading(true);
-
-    const { data, error } = await supabase.auth.signUp({ email, password });
-
-    if (error) {
-      Alert.alert('Kayıt Hatası', error.message);
-      setLoading(false);
+    if (fullName.trim().length < 2) {
+      Alert.alert('Hata', 'Ad Soyad en az 2 karakter olmalı.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Hata', 'Geçerli bir email adresi gir.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Hata', 'Şifre en az 6 karakter olmalı.');
       return;
     }
 
-    if (data.user) {
-      // Trigger zaten boş profil oluşturuyor, upsert ile güncelle
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        full_name: fullName,
-        phone: phone || null,
-        position: position || null,
-      }, { onConflict: 'id', ignoreDuplicates: false });
-    }
+    setLoading(true);
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password });
 
-    setLoading(false);
-    Alert.alert('Başarılı! 🎉', 'Hesabın oluşturuldu. Giriş yapabilirsin.', [
-      { text: 'Tamam', onPress: () => navigation.navigate('Login') }
-    ]);
+      if (error) {
+        Alert.alert('Kayıt Hatası', error.message);
+        return;
+      }
+
+      if (data.user) {
+        // Trigger zaten boş profil oluşturuyor, upsert ile güncelle
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: data.user.id,
+          full_name: fullName,
+          phone: phone || null,
+          position: position || null,
+        }, { onConflict: 'id', ignoreDuplicates: false });
+
+        if (profileError) {
+          console.warn('Profil güncellenemedi:', profileError.message);
+        }
+      }
+
+      Alert.alert('Başarılı! 🎉', 'Hesabın oluşturuldu. Giriş yapabilirsin.', [
+        { text: 'Tamam', onPress: () => navigation.navigate('Login') }
+      ]);
+    } catch (err) {
+      Alert.alert('Hata', 'Beklenmeyen bir hata oluştu. Lütfen tekrar dene.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -88,7 +110,7 @@ export default function RegisterScreen({ navigation }) {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.btnPrimary} onPress={handleRegister} disabled={loading}>
+      <TouchableOpacity style={[styles.btnPrimary, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading}>
         {loading
           ? <ActivityIndicator color="#001F5B" />
           : <Text style={styles.btnPrimaryText}>Kayıt Ol</Text>

@@ -56,7 +56,7 @@ export function NotificationProvider({ children }) {
           .eq('id', payload.new.user_id)
           .single();
         addNotification({
-          id: `mp-${Date.now()}`,
+          id: `mp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           type: 'join',
           icon: '⚽',
           title: 'Maçına Katıldı',
@@ -79,7 +79,7 @@ export function NotificationProvider({ children }) {
           .eq('id', payload.new.from_user)
           .single();
         addNotification({
-          id: `inv-${Date.now()}`,
+          id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           type: 'invite',
           icon: '🤝',
           title: 'Maç Daveti',

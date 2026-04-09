@@ -105,10 +105,8 @@ export default function VenueAdminScreen({ navigation }) {
     if (user) q = q.eq('owner_id', user.id);
     const { data, error } = await q;
     if (error || !data || data.length === 0) {
-      const { data: all } = await supabase.from('venues').select('*').order('name').limit(3);
-      const list = all || [];
-      setVenues(list);
-      setSelected(list[0] || null);
+      setVenues([]);
+      setSelected(null);
     } else {
       setVenues(data);
       setSelected(data[0]);
@@ -139,51 +137,73 @@ export default function VenueAdminScreen({ navigation }) {
   }
 
   async function loadMatches(venueId) {
-    const { data } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('venue_id', venueId)
-      .order('match_date', { ascending: false })
-      .limit(50);
-    setMatches(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('match_date', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setMatches(data || []);
+    } catch (err) {
+      Alert.alert('Hata', 'Maçlar yüklenemedi.');
+    }
   }
 
   async function loadMatchPlayers(matchId) {
-    const { data } = await supabase
-      .from('match_players')
-      .select('*, profiles(id, full_name, goals, assists, matches_played)')
-      .eq('match_id', matchId);
-    setMatchPlayers(data || []);
-    const gi = {}, ai = {};
-    (data || []).forEach(p => { gi[p.user_id] = '0'; ai[p.user_id] = '0'; });
-    setGoalInputs(gi);
-    setAssistInputs(ai);
+    try {
+      const { data, error } = await supabase
+        .from('match_players')
+        .select('*, profiles(id, full_name, goals, assists, matches_played)')
+        .eq('match_id', matchId);
+      if (error) throw error;
+      setMatchPlayers(data || []);
+      const gi = {}, ai = {};
+      (data || []).forEach(p => { gi[p.user_id] = '0'; ai[p.user_id] = '0'; });
+      setGoalInputs(gi);
+      setAssistInputs(ai);
+    } catch (err) {
+      Alert.alert('Hata', 'Oyuncu bilgileri yüklenemedi.');
+    }
   }
 
   async function loadProducts(venueId) {
-    const { data } = await supabase
-      .from('venue_products')
-      .select('*')
-      .eq('venue_id', venueId)
-      .order('name');
-    setProducts(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('venue_products')
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('name');
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (err) {
+      Alert.alert('Hata', 'Ürünler yüklenemedi.');
+    }
   }
 
   async function loadReport(venueId) {
     setLoadingReport(true);
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    const [{ data: mData }, { data: oData }] = await Promise.all([
-      supabase.from('matches').select('format, price, status, match_date').eq('venue_id', venueId).gte('match_date', weekAgo),
-      supabase.from('market_orders').select('total, status, created_at').eq('venue_id', venueId).gte('created_at', weekAgo),
-    ]);
-    const matches7  = mData  || [];
-    const orders7   = oData  || [];
-    const revenue   = matches7.reduce((s, m) => s + (m.price || selected?.price_per_hour || 0), 0);
-    const orderRev  = orders7.reduce((s, o) => s + (o.total || 0), 0);
-    const formatMap = {};
-    matches7.forEach(m => { formatMap[m.format] = (formatMap[m.format] || 0) + 1; });
-    setReport({ matches: matches7.length, revenue, orderRev, formatMap, orders: orders7.length });
-    setLoadingReport(false);
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [{ data: mData, error: mErr }, { data: oData, error: oErr }] = await Promise.all([
+        supabase.from('matches').select('format, price, status, match_date').eq('venue_id', venueId).gte('match_date', weekAgo),
+        supabase.from('market_orders').select('total, status, created_at').eq('venue_id', venueId).gte('created_at', weekAgo),
+      ]);
+      if (mErr) throw mErr;
+      if (oErr) throw oErr;
+      const matches7  = mData  || [];
+      const orders7   = oData  || [];
+      const revenue   = matches7.reduce((s, m) => s + (m.price ?? selected?.price_per_hour ?? 0), 0);
+      const orderRev  = orders7.reduce((s, o) => s + (o.total || 0), 0);
+      const formatMap = {};
+      matches7.forEach(m => { formatMap[m.format] = (formatMap[m.format] || 0) + 1; });
+      setReport({ matches: matches7.length, revenue, orderRev, formatMap, orders: orders7.length });
+    } catch (err) {
+      Alert.alert('Hata', 'Rapor yüklenemedi.');
+    } finally {
+      setLoadingReport(false);
+    }
   }
 
   // ── Saha Bilgisi Kaydet ──
@@ -194,7 +214,7 @@ export default function VenueAdminScreen({ navigation }) {
     if (editName.trim())  venueUpdate.name           = editName.trim();
     if (editDesc.trim())  venueUpdate.description    = editDesc.trim();
     if (editPhone.trim()) venueUpdate.phone           = editPhone.trim();
-    if (editPrice.trim()) venueUpdate.price_per_hour  = parseInt(editPrice) || selected.price_per_hour;
+    if (editPrice.trim()) venueUpdate.price_per_hour  = parseInt(editPrice, 10) || selected.price_per_hour;
 
     const { error: vErr } = await supabase.from('venues').update(venueUpdate).eq('id', selected.id);
     if (vErr) { Alert.alert('Hata', vErr.message); setSavingInfo(false); return; }
@@ -230,18 +250,29 @@ export default function VenueAdminScreen({ navigation }) {
   function getMVP() {
     if (!matchPlayers.length) return null;
     return matchPlayers.reduce((best, p) => {
-      const s    = (parseInt(goalInputs[p.user_id]   || 0)) * 2 + parseInt(assistInputs[p.user_id] || 0);
-      const bS   = (parseInt(goalInputs[best?.user_id] || 0)) * 2 + parseInt(assistInputs[best?.user_id] || 0);
+      const s    = (parseInt(goalInputs[p.user_id]   || 0, 10)) * 2 + parseInt(assistInputs[p.user_id] || 0, 10);
+      const bS   = (parseInt(goalInputs[best?.user_id] || 0, 10)) * 2 + parseInt(assistInputs[best?.user_id] || 0, 10);
       return s > bS ? p : best;
     }, matchPlayers[0]);
   }
 
   async function saveMatchStats() {
+    // Check if match is already completed
+    const { data: matchCheck } = await supabase
+      .from('matches')
+      .select('status')
+      .eq('id', matchModal.id)
+      .single();
+    if (matchCheck?.status === 'completed') {
+      Alert.alert('Uyarı', 'Bu maç zaten tamamlandı olarak işaretlenmiş.');
+      return;
+    }
+
     setSavingStats(true);
     const ops = matchPlayers.map(async p => {
       const uid  = p.user_id;
-      const g    = parseInt(goalInputs[uid]   || 0) || 0;
-      const a    = parseInt(assistInputs[uid] || 0) || 0;
+      const g    = parseInt(goalInputs[uid]   || 0, 10) || 0;
+      const a    = parseInt(assistInputs[uid] || 0, 10) || 0;
       const prof = p.profiles || {};
       await supabase.from('profiles').update({
         goals:          (prof.goals   || 0) + g,
@@ -274,8 +305,8 @@ export default function VenueAdminScreen({ navigation }) {
       venue_id: selected.id,
       name:     newName.trim(),
       emoji:    newEmoji,
-      price:    parseInt(newPrice) || 0,
-      stock:    parseInt(newStock) || 0,
+      price:    parseInt(newPrice, 10) || 0,
+      stock:    parseInt(newStock, 10) || 0,
       category: newCategory,
       unit:     newUnit,
       is_available: true,

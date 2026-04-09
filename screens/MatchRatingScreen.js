@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Share, Linking, Platform
@@ -9,6 +9,8 @@ import { avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
 
 export default function MatchRatingScreen({ navigation, route }) {
   const { matchId, venueId, venueName, matchDate, format } = route.params || {};
+
+  const isSubmitting = useRef(false);
   const [step, setStep] = useState('own'); // 'own' | 'rate' | 'share'
   const [myGoals, setMyGoals] = useState(0);
   const [myAssists, setMyAssists] = useState(0);
@@ -24,22 +26,29 @@ export default function MatchRatingScreen({ navigation, route }) {
   }, []);
 
   async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setMyId(user.id);
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    setMyProfile(prof);
+    if (!matchId) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setMyId(user.id);
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      setMyProfile(prof);
 
-    const { data: mp } = await supabase
-      .from('match_players')
-      .select('user_id, profiles(id, full_name, position, goals, assists, matches_played)')
-      .eq('match_id', matchId)
-      .neq('user_id', user.id);
-    setPlayers(mp?.map(p => p.profiles).filter(Boolean) || []);
+      const { data: mp } = await supabase
+        .from('match_players')
+        .select('user_id, profiles(id, full_name, position, goals, assists, matches_played)')
+        .eq('match_id', matchId)
+        .neq('user_id', user.id);
+      setPlayers(mp?.map(p => p.profiles).filter(Boolean) || []);
+    } catch (e) {
+      Alert.alert('Hata', 'Veriler yüklenemedi.');
+    }
   }
 
   async function saveAndContinue() {
     if (!myId) return;
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setSaving(true);
     try {
       // Çift sayılmayı önle: bu maç için daha önce kendi statsını kaydettiyse atla
@@ -81,8 +90,10 @@ export default function MatchRatingScreen({ navigation, route }) {
       }
     } catch (e) {
       Alert.alert('Hata', 'Kaydedilemedi, tekrar dene.');
+    } finally {
+      setSaving(false);
+      isSubmitting.current = false;
     }
-    setSaving(false);
   }
 
   async function submitRating(toUserId, rating) {
@@ -99,7 +110,7 @@ export default function MatchRatingScreen({ navigation, route }) {
         .from('match_ratings')
         .select('rating')
         .eq('to_user', toUserId)
-        .neq('to_user', toUserId === myId ? '' : toUserId); // self-rating hariç
+        .neq('from_user', toUserId); // self-rating hariç
       if (allRatings && allRatings.length > 0) {
         const validRatings = allRatings.filter(r => r.rating > 0);
         if (validRatings.length > 0) {
@@ -148,6 +159,24 @@ export default function MatchRatingScreen({ navigation, route }) {
 
   const rating = calcRating(myProfile);
   const rColor = ratingColor(rating);
+
+  // Guard: matchId yoksa hata ekranı
+  if (!matchId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.headerBack}>← Geri</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Hata</Text>
+          <View style={{ width: 50 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: '#64748B', fontSize: 15, textAlign: 'center' }}>Maç bilgisi bulunamadı.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ── ADIM 1: Kendi performansını gir ──────────────────────────
   if (step === 'own') {

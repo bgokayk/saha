@@ -43,9 +43,8 @@ export default function MatchListScreen({ navigation }) {
   const [selectedFormat, setSelectedFormat] = useState('Tümü');
   const [joiningId, setJoiningId]       = useState(null);
   const [joinedIds, setJoinedIds]       = useState(new Set());
-  const [listTab, setListTab]           = useState('all'); // 'nearby' | 'all'
+  const [listTab, setListTab]           = useState('all');
 
-  // Başvuru modal
   const [applyModal, setApplyModal]     = useState(false);
   const [applyMatch, setApplyMatch]     = useState(null);
   const [applyPosition, setApplyPosition] = useState('');
@@ -65,15 +64,9 @@ export default function MatchListScreen({ navigation }) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
-    let query = supabase
-      .from('matches')
-      .select('*, venues(name, district, city)')
-      .eq('status', 'open')
-      .order('match_date', { ascending: true });
+    let query = supabase.from('matches').select('*, venues(name, district, city)').eq('status', 'open').order('match_date', { ascending: true });
 
-    if (listTab === 'nearby') {
-      query = query.eq('is_seeking_players', true);
-    }
+    if (listTab === 'nearby') query = query.eq('is_seeking_players', true);
 
     if (selectedFormat === 'Bugün') {
       const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -83,79 +76,63 @@ export default function MatchListScreen({ navigation }) {
       query = query.eq('format', selectedFormat);
     }
 
-    const { data } = await query;
-    setMatches(data ?? []);
-
-    if (isRefresh) setRefreshing(false);
-    else setLoading(false);
+    try {
+      const { data } = await query;
+      setMatches(data ?? []);
+    } catch (err) {
+      console.warn('fetchMatches error:', err);
+      Alert.alert('Hata', 'Maçlar yüklenirken bir sorun oluştu.');
+    } finally {
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
+    }
   }, [selectedFormat, listTab]);
 
   useEffect(() => { fetchMatches(); }, [fetchMatches]);
 
   async function handleJoin(match) {
     setJoiningId(match.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Giriş Gerekli', ''); return; }
+      if (joinedIds.has(match.id)) { Alert.alert('Zaten Katıldın ⚽', ''); return; }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      Alert.alert('Giriş Gerekli', 'Maça katılmak için giriş yapmalısın.');
-      setJoiningId(null);
-      return;
-    }
-
-    if (joinedIds.has(match.id)) {
-      Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
-      setJoiningId(null);
-      return;
-    }
-
-    const { error } = await supabase
-      .from('match_players')
-      .insert({ match_id: match.id, user_id: user.id });
-
-    if (error) {
-      setJoiningId(null);
-      if (error.code === '23505') {
-        setJoinedIds(prev => new Set([...prev, match.id]));
-        Alert.alert('Zaten Katıldın ⚽', 'Bu maçta zaten kayıtlısın.');
-      } else {
-        Alert.alert('Hata', error.message);
+      const { error } = await supabase.from('match_players').insert({ match_id: match.id, user_id: user.id });
+      if (error) {
+        if (error.code === '23505') {
+          setJoinedIds(prev => new Set([...prev, match.id]));
+          Alert.alert('Zaten Katıldın ⚽', '');
+        } else {
+          Alert.alert('Hata', error.message);
+        }
+        return;
       }
-      return;
+      // Trigger handles DB update — only update local UI state
+      haptic('success');
+      setJoinedIds(prev => new Set([...prev, match.id]));
+      setMatches(prev => prev.map(m =>
+        m.id === match.id ? { ...m, current_players: (m.current_players || 0) + 1 } : m
+      ));
+    } catch (err) {
+      console.warn('handleJoin error:', err);
+      Alert.alert('Hata', 'Katılım sırasında bir sorun oluştu.');
+    } finally {
+      setJoiningId(null);
     }
-
-    // current_players artır
-    await supabase
-      .from('matches')
-      .update({ current_players: (match.current_players || 0) + 1 })
-      .eq('id', match.id);
-
-    haptic('success');
-    setJoinedIds(prev => new Set([...prev, match.id]));
-    setJoiningId(null);
-    // Listeyi güncelle (current_players göstermek için)
-    setMatches(prev => prev.map(m =>
-      m.id === match.id ? { ...m, current_players: (m.current_players || 0) + 1 } : m
-    ));
   }
 
   async function handleApply() {
     if (!applyMatch || !applyPosition) return;
     setApplying(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { Alert.alert('Giriş Gerekli', 'Başvurmak için giriş yapmalısın.'); setApplying(false); return; }
+    if (!user) { Alert.alert('Giriş Gerekli', ''); setApplying(false); return; }
     const { error } = await supabase.from('match_applications').insert({
-      match_id: applyMatch.id,
-      user_id: user.id,
-      position: applyPosition,
-      message: applyMessage,
-      status: 'pending',
+      match_id: applyMatch.id, user_id: user.id,
+      position: applyPosition, message: applyMessage, status: 'pending',
     });
-    setApplying(false);
-    setApplyModal(false);
-    setApplyMessage('');
-    setApplyPosition('');
+    setApplying(false); setApplyModal(false); setApplyMessage(''); setApplyPosition('');
     if (error) {
-      if (error.code === '23505') Alert.alert('Zaten Başvurdun ✓', 'Bu maça zaten başvurdun.');
+      if (error.code === '23505') Alert.alert('Zaten Başvurdun ✓', '');
       else Alert.alert('Hata', error.message);
     } else {
       haptic('success');
@@ -165,7 +142,6 @@ export default function MatchListScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Geri</Text>
@@ -185,30 +161,26 @@ export default function MatchListScreen({ navigation }) {
 
       {/* 2 tab */}
       <View style={styles.listTabs}>
-        <TouchableOpacity
-          style={[styles.listTabBtn, listTab === 'nearby' && styles.listTabBtnActive]}
-          onPress={() => { haptic(); setListTab('nearby'); }}>
-          <Text style={[styles.listTabText, listTab === 'nearby' && styles.listTabTextActive]}>⚡ Oyuncu Aranıyor</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.listTabBtn, listTab === 'all' && styles.listTabBtnActive]}
-          onPress={() => { haptic(); setListTab('all'); }}>
-          <Text style={[styles.listTabText, listTab === 'all' && styles.listTabTextActive]}>Tüm Maçlar</Text>
-        </TouchableOpacity>
+        {[
+          { key: 'nearby', label: '⚡ Oyuncu Aranıyor' },
+          { key: 'all',    label: 'Tüm Maçlar' },
+        ].map(t => (
+          <TouchableOpacity key={t.key}
+            style={[styles.listTabBtn, listTab === t.key && styles.listTabBtnActive]}
+            onPress={() => { haptic(); setListTab(t.key); }}>
+            <Text style={[styles.listTabText, listTab === t.key && styles.listTabTextActive]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Format filtresi */}
       <View style={styles.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           {FORMATS.map(f => (
-            <TouchableOpacity
-              key={f}
+            <TouchableOpacity key={f}
               style={[styles.filterChip, selectedFormat === f && styles.filterChipActive]}
-              onPress={() => setSelectedFormat(f)}
-            >
-              <Text style={[styles.filterChipText, selectedFormat === f && styles.filterChipTextActive]}>
-                {f}
-              </Text>
+              onPress={() => setSelectedFormat(f)}>
+              <Text style={[styles.filterChipText, selectedFormat === f && styles.filterChipTextActive]}>{f}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -216,7 +188,7 @@ export default function MatchListScreen({ navigation }) {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+          {[1,2,3].map(i => <SkeletonCard key={i} />)}
         </View>
       ) : matches.length === 0 ? (
         <EmptyState onCreatePress={() => navigation.navigate('CreateMatch')} />
@@ -225,12 +197,7 @@ export default function MatchListScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => fetchMatches(true)}
-              tintColor="#00A0D2"
-              colors={['#00A0D2']}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} tintColor="#00D4FF" colors={['#00D4FF']} />
           }
         >
           {matches.map(match => (
@@ -243,10 +210,8 @@ export default function MatchListScreen({ navigation }) {
               onJoin={() => handleJoin(match)}
               onApply={() => { setApplyMatch(match); setApplyModal(true); }}
               onRate={() => navigation.navigate('MatchRating', {
-                matchId: match.id,
-                venueId: match.venue_id,
-                venueName: match.venues?.name,
-                matchDate: match.match_date ? new Date(match.match_date).toLocaleDateString('tr-TR') : '',
+                matchId: match.id, venueId: match.venue_id,
+                venueName: match.venues?.name, matchDate: match.match_date ? new Date(match.match_date).toLocaleDateString('tr-TR') : '',
                 format: match.format,
               })}
             />
@@ -278,10 +243,9 @@ export default function MatchListScreen({ navigation }) {
                 )}
               </View>
             )}
-
             <Text style={styles.applyLabel}>Pozisyon</Text>
             <View style={styles.posRow}>
-              {['Kaleci', 'Defans', 'Orta Saha', 'Forvet'].map(pos => (
+              {['Kaleci','Defans','Orta Saha','Forvet'].map(pos => (
                 <TouchableOpacity key={pos}
                   style={[styles.posChip, applyPosition === pos && styles.posChipActive]}
                   onPress={() => setApplyPosition(pos)}>
@@ -289,22 +253,16 @@ export default function MatchListScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
-
             <Text style={styles.applyLabel}>Mesaj (İsteğe Bağlı)</Text>
             <TextInput
               style={styles.applyInput}
-              value={applyMessage}
-              onChangeText={setApplyMessage}
-              placeholder="Kendini tanıt, neden oynamak istiyorsun?"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={3}
+              value={applyMessage} onChangeText={setApplyMessage}
+              placeholder="Kendini tanıt..." placeholderTextColor="#475569"
+              multiline numberOfLines={3}
             />
-
             <TouchableOpacity
               style={[styles.applySubmitBtn, (!applyPosition || applying) && { opacity: 0.5 }]}
-              onPress={handleApply}
-              disabled={!applyPosition || applying}>
+              onPress={handleApply} disabled={!applyPosition || applying}>
               <Text style={styles.applySubmitBtnText}>{applying ? 'Gönderiliyor…' : 'Başvur 🚀'}</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -315,92 +273,45 @@ export default function MatchListScreen({ navigation }) {
 }
 
 function MatchCard({ match, joining, isJoined, onPress, onJoin, onApply, onRate }) {
-  const ballAnim    = useRef(new Animated.Value(0)).current;
-  const ballOpacity = useRef(new Animated.Value(0)).current;
-
-  const current  = match.current_players ?? 0;
-  const max      = match.max_players ?? 10;
-  const ratio    = Math.min(current / max, 1);
-  const full     = current >= max;
-  const barColor = ratio >= 1 ? '#EF4444' : ratio >= 0.6 ? '#F59E0B' : '#10B981';
-  const fmtColor = FORMAT_COLORS[match.format] || '#3B82F6';
+  const current   = match.current_players ?? 0;
+  const max       = match.max_players ?? 10;
+  const ratio     = Math.min(current / max, 1);
+  const full      = current >= max;
+  const barColor  = ratio >= 1 ? '#FF4757' : ratio >= 0.6 ? '#FFB800' : '#00E096';
+  const fmtColor  = FORMAT_COLORS[match.format] || '#3B82F6';
   const timeLabel = hoursFromNow(match.match_date);
-  const isPast   = match.match_date && new Date(match.match_date) < new Date();
-
-  function handlePress() {
-    if (full || joining || isJoined) return;
-    haptic('medium');
-    ballAnim.setValue(0);
-    ballOpacity.setValue(1);
-    Animated.parallel([
-      Animated.timing(ballAnim, { toValue: -80, duration: 600, useNativeDriver: true }),
-      Animated.sequence([
-        Animated.delay(400),
-        Animated.timing(ballOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]),
-    ]).start();
-    onJoin();
-  }
+  const isPast    = match.match_date && new Date(match.match_date) < new Date();
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.92}>
-      {/* Sol renkli şerit */}
       <View style={[styles.cardStrip, { backgroundColor: fmtColor }]} />
-
       <View style={styles.cardBody}>
-        {/* Üst */}
         <View style={styles.cardTop}>
-          <View style={styles.cardTopLeft}>
-            <View style={[styles.formatBadge, { backgroundColor: fmtColor + '1A' }]}>
-              <Text style={[styles.formatBadgeText, { color: fmtColor }]}>{match.format || '5v5'}</Text>
-            </View>
-            {!full && timeLabel && <Text style={styles.timeLabel}>{timeLabel}</Text>}
-            {full && <View style={styles.fullBadge}><Text style={styles.fullBadgeText}>Dolu</Text></View>}
+          <View style={[styles.formatBadge, { backgroundColor: fmtColor + '22' }]}>
+            <Text style={[styles.formatBadgeText, { color: fmtColor }]}>{match.format || '5v5'}</Text>
           </View>
+          {!full && <View style={styles.statusBadge}><Text style={styles.statusBadgeText}>Kayıt Açık</Text></View>}
+          {full && <View style={[styles.statusBadge, { backgroundColor: 'rgba(255,71,87,0.15)' }]}><Text style={[styles.statusBadgeText, { color: '#FF4757' }]}>Dolu</Text></View>}
+          {timeLabel && <Text style={styles.timeLabel}>{timeLabel}</Text>}
         </View>
+        <Text style={styles.venueName} numberOfLines={1}>{match.venues?.name ?? 'Saha'}</Text>
+        <Text style={styles.location}>📍 {[match.venues?.district, match.venues?.city].filter(Boolean).join(', ') || 'Bursa'}</Text>
+        <Text style={styles.dateText}>🕐 {formatMatchDate(match.match_date)}</Text>
 
-        <Text style={styles.venueName} numberOfLines={1}>
-          {match.venues?.name ?? 'Saha'}
-        </Text>
-        <Text style={styles.location}>
-          📍 {[match.venues?.district, match.venues?.city].filter(Boolean).join(', ') || 'Bursa'}
-        </Text>
-        <Text style={styles.dateText}>
-          🕐 {formatMatchDate(match.match_date)}
-        </Text>
-
-        {/* Doluluk barı */}
-        <View style={styles.fillSection}>
-          <View style={styles.fillHeader}>
-            <Text style={styles.fillLabel}>{current}/{max} oyuncu · {max - current > 0 ? `${max - current} yer kaldı` : 'Dolu'}</Text>
-            <Text style={[styles.fillCount, { color: barColor }]}>{Math.round(ratio * 100)}%</Text>
-          </View>
-          <View style={styles.fillBarBg}>
-            <View style={[styles.fillBarFg, { width: `${ratio * 100}%`, backgroundColor: barColor }]} />
-          </View>
+        <View style={styles.fillBarBg}>
+          <View style={[styles.fillBarFg, { width: `${ratio * 100}%`, backgroundColor: barColor }]} />
         </View>
+        <Text style={styles.fillLabel}>{current}/{max} oyuncu · {max - current > 0 ? `${max - current} yer kaldı` : 'Dolu'}</Text>
 
-        {/* Oyuncu aranıyor badge */}
         {match.is_seeking_players && (match.needed_positions || []).length > 0 && (
-          <View style={styles.neededRow}>
-            {(match.needed_positions || []).map(pos => (
-              <View key={pos} style={styles.neededBadge}>
-                <Text style={styles.neededBadgeText}>⚡ {pos}</Text>
-              </View>
-            ))}
+          <View style={styles.seekingBanner}>
+            <Text style={styles.seekingText}>⚡ {(match.needed_positions || []).join(', ')} aranıyor</Text>
           </View>
         )}
 
-        {/* Alt */}
         <View style={styles.cardBottom}>
-          <Text style={styles.priceText}>
-            {match.price ? `💳 ${Math.ceil(match.price / (max / 2))}₺/kişi` : 'Ücretsiz'}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {/* ⚽ fly ball */}
-            <Animated.Text style={[styles.flyBall, { transform: [{ translateY: ballAnim }], opacity: ballOpacity }]}>
-              ⚽
-            </Animated.Text>
+          <Text style={styles.priceText}>{match.price ? `${Math.ceil(match.price / (max / 2))}₺/kişi` : 'Ücretsiz'}</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             {isPast && isJoined ? (
               <TouchableOpacity style={styles.rateBtn} onPress={onRate}>
                 <Text style={styles.rateBtnText}>⭐ Değerlendir</Text>
@@ -413,13 +324,14 @@ function MatchCard({ match, joining, isJoined, onPress, onJoin, onApply, onRate 
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                  style={[styles.joinBtn, (full || isJoined) && styles.joinBtnDone]}
-                  onPress={handlePress}
-                  disabled={full || joining || isJoined}
-                >
+                  style={[styles.joinBtn, isJoined && styles.joinBtnDone, full && styles.joinBtnFull]}
+                  onPress={onJoin}
+                  disabled={full || joining || isJoined}>
                   {joining
-                    ? <ActivityIndicator color="#FFF" size="small" />
-                    : <Text style={styles.joinBtnText}>{isJoined ? 'Katıldın ✓' : full ? 'Dolu' : 'Katıl'}</Text>
+                    ? <ActivityIndicator color="#0A1628" size="small" />
+                    : <Text style={[styles.joinBtnText, isJoined && { color: '#00E096' }]}>
+                        {isJoined ? 'Katıldın ✓' : full ? 'Dolu' : 'Katıl'}
+                      </Text>
                   }
                 </TouchableOpacity>
               </>
@@ -436,7 +348,7 @@ function SkeletonCard() {
     <View style={styles.skeleton}>
       <View style={styles.skeletonLine} />
       <View style={[styles.skeletonLine, { width: '60%', marginTop: 8 }]} />
-      <View style={[styles.skeletonLine, { width: '80%', marginTop: 8, height: 6 }]} />
+      <View style={[styles.skeletonLine, { width: '80%', marginTop: 8, height: 4 }]} />
     </View>
   );
 }
@@ -455,94 +367,104 @@ function EmptyState({ onCreatePress }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
 
-  header: { backgroundColor: '#001F5B', paddingTop: 12, paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText: { color: 'rgba(255,255,255,0.55)', fontSize: 14 },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-  headerBadge: { backgroundColor: '#10B981', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  headerBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  headerCta: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  headerCtaText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  header: {
+    backgroundColor: '#0A1628', paddingBottom: 16, paddingHorizontal: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)',
+  },
+  backText:      { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
+  headerCenter:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle:   { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  headerBadge:   { backgroundColor: '#00D4FF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  headerBadgeText:{ color: '#0A1628', fontSize: 11, fontWeight: '800' },
+  headerCta:     { backgroundColor: 'rgba(0,212,255,0.12)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)' },
+  headerCtaText: { color: '#00D4FF', fontSize: 13, fontWeight: '700' },
 
-  filterWrap: { backgroundColor: '#FFFFFF', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  filterRow: { paddingHorizontal: 16, gap: 8 },
-  filterChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 22, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF' },
-  filterChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  filterChipTextActive: { color: '#FFFFFF' },
+  listTabs:        { flexDirection: 'row', backgroundColor: '#0A1628', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
+  listTabBtn:      { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  listTabBtnActive:{ borderBottomWidth: 2, borderBottomColor: '#00D4FF' },
+  listTabText:     { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  listTabTextActive:{ color: '#00D4FF', fontWeight: '700' },
+
+  filterWrap: { backgroundColor: '#0A1628', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
+  filterRow:  { paddingHorizontal: 16, gap: 8 },
+  filterChip: {
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
+  },
+  filterChipActive:     { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  filterChipText:       { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  filterChipTextActive: { color: '#00D4FF', fontWeight: '700' },
 
   loadingWrap: { padding: 16 },
-  skeleton: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12 },
-  skeletonLine: { height: 14, borderRadius: 7, backgroundColor: '#E2E8F0', width: '100%' },
+  skeleton:    { backgroundColor: '#0F1E35', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.08)' },
+  skeletonLine:{ height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.06)', width: '100%' },
 
   list: { paddingHorizontal: 16, paddingTop: 16 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, marginBottom: 12, shadowColor: '#001F5B', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 3, flexDirection: 'row', overflow: 'hidden' },
-  cardStrip: { width: 5 },
-  cardBody: { flex: 1, padding: 14 },
-  cardTop: { marginBottom: 8 },
-  cardTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  venueName: { fontSize: 15, fontWeight: '700', color: '#001F5B', marginBottom: 3 },
-  formatBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  formatBadgeText: { fontSize: 12, fontWeight: '700' },
-  timeLabel: { fontSize: 11, color: '#94A3B8' },
-  fullBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  fullBadgeText: { color: '#EF4444', fontSize: 11, fontWeight: '700' },
-  location: { fontSize: 12, color: '#94A3B8', marginBottom: 3 },
-  dateText: { fontSize: 12, color: '#64748B', marginBottom: 10 },
+  card: {
+    backgroundColor: '#0F1E35', borderRadius: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)',
+    flexDirection: 'row', overflow: 'hidden',
+  },
+  cardStrip:  { width: 4 },
+  cardBody:   { flex: 1, padding: 14 },
+  cardTop:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  venueName:  { fontSize: 16, fontWeight: '800', color: '#FFFFFF', marginBottom: 3 },
+  formatBadge:{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 },
+  formatBadgeText:{ fontSize: 11, fontWeight: '700' },
+  statusBadge:{ backgroundColor: 'rgba(0,224,150,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  statusBadgeText:{ color: '#00E096', fontSize: 10, fontWeight: '700' },
+  timeLabel:  { fontSize: 10, color: 'rgba(255,255,255,0.35)', marginLeft: 'auto' },
+  location:   { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 2 },
+  dateText:   { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 10 },
 
-  fillSection: { marginBottom: 14 },
-  fillHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  fillLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
-  fillCount: { fontSize: 11, color: '#00A0D2', fontWeight: '700' },
-  fillBarBg: { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
-  fillBarFg: { height: '100%', borderRadius: 4 },
+  fillBarBg:  { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginBottom: 4 },
+  fillBarFg:  { height: 4, borderRadius: 2 },
+  fillLabel:  { fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 8 },
+
+  seekingBanner: { backgroundColor: 'rgba(255,184,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.25)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 8 },
+  seekingText:   { color: '#FFB800', fontSize: 11, fontWeight: '700' },
 
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceText: { fontSize: 13, fontWeight: '600', color: '#001F5B' },
-  joinBtn: { backgroundColor: '#001F5B', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 22, alignItems: 'center', shadowColor: '#001F5B', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
-  joinBtnDone: { backgroundColor: '#10B981', shadowColor: '#10B981' },
-  joinBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  flyBall: { position: 'absolute', fontSize: 20, alignSelf: 'center', bottom: 8, zIndex: 10 },
+  priceText:  { fontSize: 13, fontWeight: '700', color: '#FFB800' },
+  joinBtn:    { backgroundColor: '#00D4FF', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
+  joinBtnDone:{ backgroundColor: 'rgba(0,224,150,0.12)', borderWidth: 1, borderColor: '#00E096' },
+  joinBtnFull:{ backgroundColor: 'rgba(255,255,255,0.06)' },
+  joinBtnText:{ color: '#0A1628', fontSize: 12, fontWeight: '800' },
+  applyBtn:   { backgroundColor: 'rgba(255,184,0,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,184,0,0.4)' },
+  applyBtnText:{ color: '#FFB800', fontSize: 12, fontWeight: '700' },
+  rateBtn:    { backgroundColor: 'rgba(139,92,246,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(139,92,246,0.4)' },
+  rateBtnText:{ color: '#8B5CF6', fontSize: 12, fontWeight: '700' },
 
-  listTabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  listTabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  listTabBtnActive: { borderBottomWidth: 2.5, borderBottomColor: '#001F5B' },
-  listTabText: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
-  listTabTextActive: { color: '#001F5B' },
+  neededRow:       { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  neededBadge:     { backgroundColor: 'rgba(255,184,0,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,184,0,0.3)' },
+  neededBadgeText: { fontSize: 11, fontWeight: '700', color: '#FFB800' },
 
-  neededRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  neededBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  neededBadgeText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  applyModalContainer: { flex: 1, backgroundColor: '#0A1628' },
+  applyModalHeader:    { backgroundColor: '#0A1628', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
+  applyModalTitle:     { color: '#fff', fontSize: 18, fontWeight: '800' },
+  applyModalClose:     { color: 'rgba(255,255,255,0.45)', fontSize: 18 },
+  applyModalBody:      { padding: 16 },
+  applyMatchInfo:      { backgroundColor: '#0F1E35', borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  applyMatchVenue:     { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  applyMatchDate:      { fontSize: 13, color: 'rgba(255,255,255,0.45)' },
+  applyLabel:          { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.6)', marginBottom: 8, marginTop: 8, letterSpacing: 1 },
+  posRow:              { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  posChip:             { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  posChipActive:       { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  posChipText:         { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  posChipTextActive:   { color: '#00D4FF', fontWeight: '700' },
+  applyInput:          { backgroundColor: '#0F1E35', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#FFFFFF', marginBottom: 16, minHeight: 80, textAlignVertical: 'top' },
+  applySubmitBtn:      { backgroundColor: '#00D4FF', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  applySubmitBtnText:  { color: '#0A1628', fontSize: 15, fontWeight: '800' },
 
-  applyBtn: { backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22 },
-  applyBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  rateBtn: { backgroundColor: '#8B5CF6', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22 },
-  rateBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-
-  applyModalContainer: { flex: 1, backgroundColor: '#F4F6F9' },
-  applyModalHeader: { backgroundColor: '#001F5B', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20 },
-  applyModalTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  applyModalClose: { color: 'rgba(255,255,255,0.6)', fontSize: 18, fontWeight: '700' },
-  applyModalBody: { padding: 16 },
-  applyMatchInfo: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 16, gap: 4 },
-  applyMatchVenue: { fontSize: 16, fontWeight: '800', color: '#001F5B' },
-  applyMatchDate: { fontSize: 13, color: '#64748B' },
-  applyLabel: { fontSize: 13, fontWeight: '700', color: '#001F5B', marginBottom: 8, marginTop: 4 },
-  posRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  posChip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  posChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  posChipText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  posChipTextActive: { color: '#fff' },
-  applyInput: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#001F5B', marginBottom: 16, minHeight: 80, textAlignVertical: 'top' },
-  applySubmitBtn: { backgroundColor: '#001F5B', borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  applySubmitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: 40 },
-  emptyIcon: { fontSize: 52, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#001F5B', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#94A3B8', textAlign: 'center', marginBottom: 24 },
-  emptyBtn: { backgroundColor: '#001F5B', paddingHorizontal: 28, paddingVertical: 13, borderRadius: 14, shadowColor: '#001F5B', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
-  emptyBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  empty:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: 40 },
+  emptyIcon:  { fontSize: 52, marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  emptySub:   { fontSize: 14, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 24 },
+  emptyBtn:   { backgroundColor: '#00D4FF', paddingHorizontal: 28, paddingVertical: 13, borderRadius: 14 },
+  emptyBtnText:{ color: '#0A1628', fontSize: 15, fontWeight: '800' },
 });

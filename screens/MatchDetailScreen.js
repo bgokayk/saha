@@ -5,8 +5,7 @@ import {
 import { useEffect, useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { formatMatchDate } from '../lib/utils';
-import { avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
+import { formatMatchDate, avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
 
 function haptic(type = 'light') {
   if (Platform.OS === 'web') return;
@@ -38,18 +37,32 @@ export default function MatchDetailScreen({ navigation, route }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: { user } }, { data: m }, { data: mp }] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.from('matches').select('*, venues(*), organizer:profiles!matches_organizer_id_fkey(id, full_name)').eq('id', matchId).single(),
-      supabase.from('match_players').select('user_id, profiles(id, full_name, position, goals, assists, matches_played, avatar_url)').eq('match_id', matchId),
-    ]);
-    setMyId(user?.id || null);
-    setMatch(m);
-    setPlayers(mp || []);
-    setLoading(false);
+    try {
+      const [{ data: { user } }, { data: m }, { data: mp }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('matches').select('*, venues(*), organizer:profiles!organizer_id(id, full_name)').eq('id', matchId).single(),
+        supabase.from('match_players').select('user_id, profiles(id, full_name, position, goals, assists, matches_played, avatar_url)').eq('match_id', matchId),
+      ]);
+      setMyId(user?.id || null);
+      setMatch(m);
+      setPlayers(mp || []);
+    } catch (err) {
+      console.warn('load error:', err);
+      Alert.alert('Hata', 'Maç bilgileri yüklenirken bir sorun oluştu.');
+    } finally {
+      setLoading(false);
+    }
   }, [matchId]);
 
   useEffect(() => { load(); }, [load]);
+
+  if (!matchId) {
+    return (
+      <View style={[styles.loadWrap, { paddingTop: insets.top }]}>
+        <Text style={{ color: '#94A3B8' }}>Geçersiz maç ID.</Text>
+      </View>
+    );
+  }
 
   async function handleJoin() {
     if (!myId) { Alert.alert('Giriş Gerekli', 'Önce giriş yap.'); return; }
@@ -59,7 +72,7 @@ export default function MatchDetailScreen({ navigation, route }) {
       if (error.code === '23505') Alert.alert('Zaten Katıldın ⚽', '');
       else Alert.alert('Hata', error.message);
     } else {
-      await supabase.from('matches').update({ current_players: (match.current_players || 0) + 1 }).eq('id', matchId);
+      // Trigger handles current_players increment automatically
       haptic('success');
       load();
     }
@@ -71,11 +84,18 @@ export default function MatchDetailScreen({ navigation, route }) {
       { text: 'İptal', style: 'cancel' },
       { text: 'Ayrıl', style: 'destructive', onPress: async () => {
         setActionLoading(true);
-        await supabase.from('match_players').delete().eq('match_id', matchId).eq('user_id', myId);
-        await supabase.from('matches').update({ current_players: Math.max(0, (match.current_players || 1) - 1) }).eq('id', matchId);
-        haptic();
-        load();
-        setActionLoading(false);
+        try {
+          const { error } = await supabase.from('match_players').delete().eq('match_id', matchId).eq('user_id', myId);
+          if (error) { Alert.alert('Hata', error.message); return; }
+          // Trigger handles current_players decrement automatically
+          haptic();
+          await load();
+        } catch (err) {
+          console.warn('handleLeave error:', err);
+          Alert.alert('Hata', 'Maçtan ayrılırken bir sorun oluştu.');
+        } finally {
+          setActionLoading(false);
+        }
       }},
     ]);
   }
@@ -84,9 +104,15 @@ export default function MatchDetailScreen({ navigation, route }) {
     Alert.alert('Maçı Bitir', 'Maçı tamamlandı olarak işaretlemek istiyor musun?', [
       { text: 'İptal', style: 'cancel' },
       { text: 'Bitir', onPress: async () => {
-        await supabase.from('matches').update({ status: 'completed' }).eq('id', matchId);
-        haptic('success');
-        load();
+        try {
+          const { error } = await supabase.from('matches').update({ status: 'completed' }).eq('id', matchId);
+          if (error) { Alert.alert('Hata', error.message); return; }
+          haptic('success');
+          await load();
+        } catch (err) {
+          console.warn('handleEndMatch error:', err);
+          Alert.alert('Hata', 'Maç bitirilirken bir sorun oluştu.');
+        }
       }},
     ]);
   }

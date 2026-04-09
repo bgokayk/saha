@@ -77,28 +77,49 @@ export default function MarketScreen({ navigation, route }) {
 
   async function checkout() {
     if (cartCount === 0) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    Alert.alert(
-      'Sipariş Ver 🛒',
-      `Toplam: ${total}₺\nGörevli 5 dk içinde getirecek.`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        { text: 'Onayla', onPress: async () => {
-          if (user && venueId) {
-            await supabase.from('market_orders').insert({
-              venue_id: venueId,
-              user_id: user.id,
-              match_id: matchId || null,
-              items: cartList.map(({ product: p, qty }) => ({ id: p.id, name: p.name, qty, price: p.price })),
-              total,
-              status: 'pending',
-            });
-          }
-          clearCart();
-          Alert.alert('Sipariş Alındı! 🎉', 'Görevli 5 dk içinde getirecek. 🏃');
-        }},
-      ]
-    );
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('wallet_balance')
+          .eq('id', user.id)
+          .single();
+        const balance = prof?.wallet_balance ?? 0;
+        if (balance < total) {
+          Alert.alert('Yetersiz Bakiye', `Cüzdanınızda ${balance}₺ var, sipariş tutarı ${total}₺.`);
+          return;
+        }
+      }
+      Alert.alert(
+        'Sipariş Ver 🛒',
+        `Toplam: ${total}₺\nGörevli 5 dk içinde getirecek.`,
+        [
+          { text: 'İptal', style: 'cancel' },
+          { text: 'Onayla', onPress: async () => {
+            try {
+              if (user && venueId) {
+                const { error } = await supabase.from('market_orders').insert({
+                  venue_id: venueId,
+                  user_id: user.id,
+                  match_id: matchId || null,
+                  items: cartList.map(({ product: p, qty }) => ({ id: p.id, name: p.name, qty, price: p.price })),
+                  total,
+                  status: 'pending',
+                });
+                if (error) { Alert.alert('Hata', 'Sipariş kaydedilemedi: ' + error.message); return; }
+              }
+              clearCart();
+              Alert.alert('Sipariş Alındı! 🎉', 'Görevli 5 dk içinde getirecek. 🏃');
+            } catch (e) {
+              Alert.alert('Hata', 'Sipariş sırasında bir sorun oluştu.');
+            }
+          }},
+        ]
+      );
+    } catch (e) {
+      Alert.alert('Hata', 'İşlem sırasında bir sorun oluştu.');
+    }
   }
 
   const filtered = cat === 'Tümü' ? products : products.filter(p => p.category === cat);

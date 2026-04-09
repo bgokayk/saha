@@ -6,7 +6,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { calcRating, ratingColor, ratingLabel, getLevel, avatarColor, initials } from '../lib/utils';
+import { calcRating, ratingColor, ratingLabel, avatarColor, initials } from '../lib/utils';
+
+function getLevel(matches) {
+  if (matches >= 100) return { name: 'Efsane', color: '#FFB800', xp: matches * 10 };
+  if (matches >= 50)  return { name: 'Pro',    color: '#00E096', xp: matches * 10 };
+  if (matches >= 20)  return { name: 'İleri',  color: '#00D4FF', xp: matches * 10 };
+  return { name: 'Amatör', color: '#8B5CF6', xp: matches * 10 };
+}
 
 function haptic(type = 'light') {
   if (Platform.OS === 'web') return;
@@ -99,27 +106,37 @@ export default function ProfileScreen({ navigation, route }) {
 
   async function fetchMatchHistory(userId) {
     setHistoryLoading(true);
-    const { data } = await supabase
-      .from('match_players')
-      .select('*, matches(id, format, match_date, status, venues(name, district))')
-      .eq('user_id', userId)
-      .order('joined_at', { ascending: false })
-      .limit(30);
-    setMatchHistory(data || []);
-    setHistoryLoading(false);
+    try {
+      const { data } = await supabase
+        .from('match_players')
+        .select('*, matches(id, format, match_date, status, venues(name, district))')
+        .eq('user_id', userId)
+        .order('joined_at', { ascending: false })
+        .limit(30);
+      setMatchHistory(data || []);
+    } catch (e) {
+      console.error('fetchMatchHistory error:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function fetchProfile() {
-    let id = profileId;
-    if (!id) {
-      const { data: { user } } = await supabase.auth.getUser();
-      id = user?.id;
+    try {
+      let id = profileId;
+      if (!id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        id = user?.id;
+      }
+      if (!id) { setLoading(false); return; }
+      const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
+      setProfile(data);
+      fetchMatchHistory(id);
+    } catch (e) {
+      console.error('fetchProfile error:', e);
+    } finally {
+      setLoading(false);
     }
-    if (!id) { setLoading(false); return; }
-    const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
-    setProfile(data);
-    setLoading(false);
-    fetchMatchHistory(id);
   }
 
   useEffect(() => {
@@ -193,14 +210,8 @@ export default function ProfileScreen({ navigation, route }) {
       const ext   = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${profile.id}.${ext}`;
 
-      let uploadData;
-      if (Platform.OS === 'web') {
-        const res = await fetch(asset.uri);
-        uploadData = await res.blob();
-      } else {
-        const res = await fetch(asset.uri);
-        uploadData = await res.blob();
-      }
+      const res = await fetch(asset.uri);
+      const uploadData = await res.blob();
 
       const { error: upErr } = await supabase.storage
         .from('avatars')
@@ -229,6 +240,8 @@ export default function ProfileScreen({ navigation, route }) {
 
   async function saveEdit() {
     if (!editName.trim()) { Alert.alert('Hata', 'İsim boş olamaz.'); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== profile.id) { Alert.alert('Hata', 'Bu profili düzenleme yetkiniz yok.'); return; }
     setSaving(true);
     const updates = { full_name: editName.trim(), position: editPos };
     if (editPhone.trim()) updates.phone = editPhone.trim();
@@ -260,7 +273,7 @@ export default function ProfileScreen({ navigation, route }) {
 
   const rating      = calcRating(profile);
   const rColor      = ratingColor(rating);
-  const level       = getLevel(profile);
+  const level       = getLevel(profile?.matches_played || 0);
   const bgColor     = avatarColor(profile.full_name);
   const unlockedAch = ACHIEVEMENTS.filter(a => a.req(profile));
   const xpTotal     = unlockedAch.reduce((s, a) => s + a.xp, 0);
@@ -317,7 +330,7 @@ export default function ProfileScreen({ navigation, route }) {
             <Text style={[styles.fifaRating, { color: rColor }]}>{rating.toFixed(1)}</Text>
             <Text style={[styles.fifaPos, { color: rColor }]}>{posShort}</Text>
             <Animated.View style={[styles.fifaLevelBadge, { backgroundColor: level.color, transform: [{ scale: pulsAnim }] }]}>
-              <Text style={styles.fifaLevelText}>{level.title}</Text>
+              <Text style={styles.fifaLevelText}>{level.name}</Text>
             </Animated.View>
             <Text style={styles.fifaFlag}>🇹🇷</Text>
           </View>
@@ -369,7 +382,6 @@ export default function ProfileScreen({ navigation, route }) {
           <View style={styles.xpBarBg}>
             <Animated.View style={[styles.xpBarFill, { width: xpBarWidth, backgroundColor: level.color }]} />
           </View>
-          {level.next && <Text style={styles.xpNextText}>Sonraki seviye için {level.next} maç daha</Text>}
         </Animated.View>
 
         {/* ── Stat Kartları ── */}
@@ -498,15 +510,15 @@ export default function ProfileScreen({ navigation, route }) {
             ) : (
               matchHistory.map((mp, i) => {
                 const m = mp.matches;
-                const won = Math.random() > 0.5; // gerçek sonuç gelene kadar
+                const won = null; // gerçek sonuç gelene kadar
                 const goals   = mp.goals   || 0;
                 const assists = mp.assists || 0;
                 const rating  = mp.rating  || null;
                 return (
-                  <View key={mp.id || i} style={[styles.historyCard, { borderLeftColor: won ? '#10B981' : '#EF4444' }]}>
+                  <View key={mp.id || i} style={[styles.historyCard, { borderLeftColor: won === true ? '#10B981' : won === false ? '#EF4444' : '#64748B' }]}>
                     <View style={styles.historyTop}>
-                      <View style={[styles.historyFormatBadge, { backgroundColor: won ? '#D1FAE5' : '#FEE2E2' }]}>
-                        <Text style={[styles.historyFormatText, { color: won ? '#065F46' : '#991B1B' }]}>
+                      <View style={[styles.historyFormatBadge, { backgroundColor: won === true ? '#D1FAE5' : won === false ? '#FEE2E2' : '#F1F5F9' }]}>
+                        <Text style={[styles.historyFormatText, { color: won === true ? '#065F46' : won === false ? '#991B1B' : '#475569' }]}>
                           {m?.format || '5v5'}
                         </Text>
                       </View>
@@ -627,145 +639,153 @@ export default function ProfileScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
 
-  header: { backgroundColor: '#001F5B', paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  header: {
+    backgroundColor: '#0A1628', paddingBottom: 16, paddingHorizontal: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)',
+  },
+  backText:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-  headerActions: { flexDirection: 'row', gap: 8 },
-  headerIconBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  headerIcon: { fontSize: 17 },
+  headerActions:{ flexDirection: 'row', gap: 8 },
+  headerIconBtn:{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(0,212,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  headerIcon:   { fontSize: 17 },
 
   // FIFA Kart
-  fifaCard: { backgroundColor: '#001F5B', marginHorizontal: 16, marginTop: 16, borderRadius: 22, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden', shadowColor: '#001F5B', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
-  fifaDecor: { position: 'absolute', width: 200, height: 200, borderRadius: 100, top: -50, right: -50 },
-  fifaLeft: { alignItems: 'center', gap: 4, minWidth: 55 },
-  fifaRating: { fontSize: 36, fontWeight: '900' },
-  fifaPos: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
-  fifaLevelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4 },
-  fifaLevelText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  fifaFlag: { fontSize: 16, marginTop: 4 },
-  fifaCenter: { alignItems: 'center', flex: 1 },
-  fifaAvatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, padding: 3, marginBottom: 10, position: 'relative' },
-  fifaAvatarInner: { width: '100%', height: '100%', borderRadius: 42, justifyContent: 'center', alignItems: 'center' },
+  fifaCard: {
+    backgroundColor: '#0F1E35', marginHorizontal: 16, marginTop: 16, borderRadius: 22,
+    padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
+  },
+  fifaDecor:    { position: 'absolute', width: 200, height: 200, borderRadius: 100, top: -50, right: -50 },
+  fifaLeft:     { alignItems: 'center', gap: 4, minWidth: 55 },
+  fifaRating:   { fontSize: 52, fontWeight: '900' },
+  fifaPos:      { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+  fifaLevelBadge:{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4 },
+  fifaLevelText: { color: '#0A1628', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  fifaFlag:     { fontSize: 16, marginTop: 4 },
+  fifaCenter:   { alignItems: 'center', flex: 1 },
+  fifaAvatarRing:{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, padding: 3, marginBottom: 10, position: 'relative' },
+  fifaAvatarInner:{ width: '100%', height: '100%', borderRadius: 42, justifyContent: 'center', alignItems: 'center' },
   fifaAvatarImg: { width: '100%', height: '100%', borderRadius: 42 },
-  fifaAvatarOverlay: { position: 'absolute', inset: 0, borderRadius: 42, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  fifaAvatarOverlay:{ position: 'absolute', inset: 0, borderRadius: 42, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   fifaInitials: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
-  cameraBtn: { position: 'absolute', bottom: 8, right: -4, backgroundColor: '#00A0D2', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#001F5B' },
-  cameraBtnText: { fontSize: 11 },
-  fifaName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 2 },
-  fifaRatingLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  fifaRight: { alignItems: 'center', gap: 10, minWidth: 55 },
-  fifaStat: { alignItems: 'center' },
-  fifaStatNum: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
-  fifaStatLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9, letterSpacing: 1 },
+  cameraBtn:    { position: 'absolute', bottom: 8, right: -4, backgroundColor: '#00D4FF', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#0A1628' },
+  cameraBtnText:{ fontSize: 11 },
+  fifaName:     { color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 2 },
+  fifaRatingLabel:{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  fifaRight:    { alignItems: 'center', gap: 10, minWidth: 55 },
+  fifaStat:     { alignItems: 'center' },
+  fifaStatNum:  { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  fifaStatLabel:{ color: 'rgba(255,255,255,0.35)', fontSize: 9, letterSpacing: 1 },
 
   // XP
-  xpSection: { marginHorizontal: 16, marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  xpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  xpLabel: { color: '#64748B', fontSize: 12, fontWeight: '600' },
-  xpBarBg: { height: 10, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden', marginBottom: 6 },
-  xpBarFill: { height: '100%', borderRadius: 5 },
-  xpNextText: { color: '#94A3B8', fontSize: 11 },
+  xpSection: { marginHorizontal: 16, marginTop: 14, backgroundColor: '#0F1E35', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  xpRow:     { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  xpLabel:   { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '600' },
+  xpBarBg:   { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
+  xpBarFill: { height: '100%', borderRadius: 3 },
+  xpNextText:{ color: 'rgba(255,255,255,0.3)', fontSize: 11 },
 
   // Stat grid
   statsGrid: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 12, gap: 10 },
-  statCard: { flex: 1, borderRadius: 14, paddingVertical: 16, alignItems: 'center', gap: 4, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2, borderTopWidth: 3 },
-  statIcon: { fontSize: 18 },
-  statNum: { fontSize: 22, fontWeight: '800' },
-  statLabel: { color: '#64748B', fontSize: 10 },
+  statCard:  { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 4, borderTopWidth: 3, backgroundColor: '#0F1E35' },
+  statIcon:  { fontSize: 16 },
+  statNum:   { fontSize: 20, fontWeight: '900' },
+  statLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 9, letterSpacing: 1 },
 
   // Ratio
-  ratioCard: { backgroundColor: '#FFFFFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  ratioTitle: { color: '#001F5B', fontSize: 12, fontWeight: '700', marginBottom: 12 },
-  ratioRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  ratioGroup: { flexDirection: 'row', alignItems: 'center' },
-  ratioItem: { alignItems: 'center' },
-  ratioNum: { color: '#001F5B', fontSize: 20, fontWeight: '800' },
-  ratioLabel: { color: '#64748B', fontSize: 11, marginTop: 2 },
-  ratioDivider: { width: 1, height: 40, backgroundColor: '#E2E8F0', marginHorizontal: 14 },
+  ratioCard:   { backgroundColor: '#0F1E35', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.08)' },
+  ratioTitle:  { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginBottom: 12, letterSpacing: 1 },
+  ratioRow:    { flexDirection: 'row', justifyContent: 'space-around' },
+  ratioGroup:  { flexDirection: 'row', alignItems: 'center' },
+  ratioItem:   { alignItems: 'center' },
+  ratioNum:    { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
+  ratioLabel:  { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 },
+  ratioDivider:{ width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 14 },
 
   // Tab
-  tabSegment: { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, marginBottom: 4, backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4 },
-  tabSegBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabSegBtnActive: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-  tabSegText: { color: '#64748B', fontSize: 13 },
-  tabSegTextActive: { color: '#001F5B', fontWeight: '700' },
+  tabSegment:      { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, marginBottom: 4, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 4 },
+  tabSegBtn:       { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  tabSegBtnActive: { backgroundColor: 'rgba(0,212,255,0.12)', borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)' },
+  tabSegText:      { color: 'rgba(255,255,255,0.35)', fontSize: 13 },
+  tabSegTextActive:{ color: '#00D4FF', fontWeight: '700' },
 
-  section: { paddingHorizontal: 16, paddingTop: 12 },
-  sectionSubTitle: { color: '#001F5B', fontSize: 12, fontWeight: '700', marginBottom: 12, letterSpacing: 0.3 },
+  section:         { paddingHorizontal: 16, paddingTop: 12 },
+  sectionSubTitle: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700', marginBottom: 12, letterSpacing: 1 },
 
   // Period
-  periodRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  periodBtn: { flex: 1, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', alignItems: 'center' },
-  periodBtnActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  periodText: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
-  periodTextActive: { color: '#FFFFFF' },
+  periodRow:       { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  periodBtn:       { flex: 1, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)' },
+  periodBtnActive: { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  periodText:      { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  periodTextActive:{ color: '#00D4FF' },
 
   // Rating barlar
-  barRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
-  barLabel: { color: '#64748B', fontSize: 12, width: 60 },
-  barBg: { flex: 1, height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 4 },
-  barVal: { fontSize: 12, fontWeight: '700', width: 30, textAlign: 'right' },
+  barRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
+  barLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 12, width: 60 },
+  barBg:    { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' },
+  barFill:  { height: '100%', borderRadius: 3 },
+  barVal:   { fontSize: 12, fontWeight: '700', width: 30, textAlign: 'right' },
 
   // Başarımlar grid
-  achGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  achCard: { width: '30%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, alignItems: 'center', gap: 6, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, position: 'relative' },
-  achCardLocked: { opacity: 0.5, borderWidth: 1, borderColor: '#E2E8F0' },
-  achIconWrap: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  achIcon: { fontSize: 28 },
-  achCardTitle: { color: '#001F5B', fontSize: 11, fontWeight: '700', textAlign: 'center' },
-  achCardXP: { fontSize: 10, fontWeight: '700' },
-  achLock: { position: 'absolute', top: 6, right: 6 },
-  achLockIcon: { fontSize: 10 },
+  achGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  achCard:      { width: '30%', backgroundColor: '#0F1E35', borderRadius: 16, padding: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)', position: 'relative' },
+  achCardLocked:{ opacity: 0.35 },
+  achIconWrap:  { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  achIcon:      { fontSize: 28 },
+  achCardTitle: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  achCardXP:    { fontSize: 10, fontWeight: '700' },
+  achLock:      { position: 'absolute', top: 6, right: 6 },
+  achLockIcon:  { fontSize: 10 },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { justifyContent: 'center', alignItems: 'center' },
-  modalCard: { backgroundColor: '#FFFFFF', borderRadius: 28, padding: 32, alignItems: 'center', width: 300, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 },
-  modalIconWrap: { width: 100, height: 100, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  modalIcon: { fontSize: 52 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#001F5B', marginBottom: 8, textAlign: 'center' },
-  modalDesc: { fontSize: 14, color: '#64748B', marginBottom: 20, textAlign: 'center' },
-  modalXPBadge: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginBottom: 20 },
-  modalXPText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  modalCloseBtn: { backgroundColor: '#001F5B', paddingHorizontal: 36, paddingVertical: 14, borderRadius: 20 },
-  modalCloseBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  confettiDot: { position: 'absolute', width: 10, height: 10, borderRadius: 5 },
+  modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  modalContainer:  { justifyContent: 'center', alignItems: 'center' },
+  modalCard:       { backgroundColor: '#0F1E35', borderRadius: 28, padding: 32, alignItems: 'center', width: 300, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  modalIconWrap:   { width: 100, height: 100, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  modalIcon:       { fontSize: 52 },
+  modalTitle:      { fontSize: 24, fontWeight: '900', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' },
+  modalDesc:       { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 20, textAlign: 'center' },
+  modalXPBadge:    { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginBottom: 20 },
+  modalXPText:     { color: '#0A1628', fontSize: 15, fontWeight: '800' },
+  modalCloseBtn:   { backgroundColor: '#00D4FF', paddingHorizontal: 36, paddingVertical: 14, borderRadius: 20 },
+  modalCloseBtnText:{ color: '#0A1628', fontSize: 15, fontWeight: '700' },
+  confettiDot:     { position: 'absolute', width: 10, height: 10, borderRadius: 5 },
 
   // Edit modal
-  editOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  editSheet:      { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
-  editHandle:     { width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  editTitle:      { fontSize: 18, fontWeight: '800', color: '#001F5B', marginBottom: 20 },
-  editLabel:      { color: '#64748B', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-  editInput:      { backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 16, color: '#001F5B', fontSize: 15, borderWidth: 1, borderColor: '#E2E8F0' },
+  editOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  editSheet:      { backgroundColor: '#0F1E35', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  editHandle:     { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  editTitle:      { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginBottom: 20 },
+  editLabel:      { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+  editInput:      { backgroundColor: '#0F1E35', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 16, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
   posRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  posChip:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-  posChipActive:  { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  posChipText:    { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  posChipTextActive: { color: '#FFFFFF' },
+  posChip:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  posChipActive:  { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  posChipText:    { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  posChipTextActive:{ color: '#00D4FF' },
   editBtnRow:     { flexDirection: 'row', gap: 12, marginTop: 24 },
-  editCancelBtn:  { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', alignItems: 'center' },
-  editCancelText: { color: '#64748B', fontSize: 15, fontWeight: '600' },
-  editSaveBtn:    { flex: 2, paddingVertical: 14, borderRadius: 14, backgroundColor: '#001F5B', alignItems: 'center' },
-  editSaveText:   { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  editCancelBtn:  { flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
+  editCancelText: { color: 'rgba(255,255,255,0.45)', fontSize: 15, fontWeight: '600' },
+  editSaveBtn:    { flex: 2, paddingVertical: 14, borderRadius: 14, backgroundColor: '#00D4FF', alignItems: 'center' },
+  editSaveText:   { color: '#0A1628', fontSize: 15, fontWeight: '700' },
 
   // Maç Geçmişi
-  historyCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 10, borderLeftWidth: 4, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  historyTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  historyCard:        { backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, marginBottom: 10, borderLeftWidth: 4, borderWidth: 1, borderColor: 'rgba(0,212,255,0.08)' },
+  historyTop:         { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   historyFormatBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  historyFormatText: { fontSize: 11, fontWeight: '700' },
-  historyDate: { flex: 1, color: '#64748B', fontSize: 12 },
+  historyFormatText:  { fontSize: 11, fontWeight: '700' },
+  historyDate:        { flex: 1, color: 'rgba(255,255,255,0.35)', fontSize: 12 },
   historyRatingBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  historyRatingText: { fontSize: 12, fontWeight: '800' },
-  historyVenue: { color: '#001F5B', fontSize: 14, fontWeight: '700', marginBottom: 2 },
-  historyDistrict: { color: '#64748B', fontSize: 12, marginBottom: 8 },
-  historyStats: { flexDirection: 'row', gap: 12 },
-  historyStatItem: { fontSize: 13, color: '#374151', fontWeight: '600' },
-  emptyHistory: { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyHistoryIcon: { fontSize: 48 },
-  emptyHistoryText: { color: '#64748B', fontSize: 15 },
-  emptyHistoryLink: { color: '#00A0D2', fontSize: 14, fontWeight: '600' },
+  historyRatingText:  { fontSize: 12, fontWeight: '800' },
+  historyVenue:       { color: '#FFFFFF', fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  historyDistrict:    { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginBottom: 8 },
+  historyStats:       { flexDirection: 'row', gap: 12 },
+  historyStatItem:    { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+  emptyHistory:       { alignItems: 'center', paddingVertical: 48, gap: 10 },
+  emptyHistoryIcon:   { fontSize: 48 },
+  emptyHistoryText:   { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
+  emptyHistoryLink:   { color: '#00D4FF', fontSize: 14, fontWeight: '600' },
 });

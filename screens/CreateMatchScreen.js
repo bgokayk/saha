@@ -39,11 +39,13 @@ export default function CreateMatchScreen({ navigation, route }) {
   const [neededPositions, setNeededPositions] = useState([]);
   const [busyHours, setBusyHours]       = useState([]);
 
+  const isSubmitting = useRef(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const confetti  = useRef(Array.from({ length: 12 }, () => ({
     x: new Animated.Value(0), y: new Animated.Value(0), o: new Animated.Value(0),
   }))).current;
   const [done, setDone] = useState(false);
+  const [createdMatch, setCreatedMatch] = useState(null);
 
   useEffect(() => { fetchVenues(); }, []);
 
@@ -53,20 +55,24 @@ export default function CreateMatchScreen({ navigation, route }) {
   }, [venue, date]);
 
   async function fetchBusyHours() {
-    const dayStart = `${date}T00:00:00`;
-    const dayEnd   = `${date}T23:59:59`;
-    const { data } = await supabase
-      .from('matches')
-      .select('match_date')
-      .eq('venue_id', venue.id)
-      .gte('match_date', dayStart)
-      .lte('match_date', dayEnd);
-    setBusyHours((data || []).map(m => new Date(m.match_date).getHours()));
+    try {
+      const dayStart = `${date}T00:00:00`;
+      const dayEnd   = `${date}T23:59:59`;
+      const { data, error } = await supabase
+        .from('matches')
+        .select('match_date')
+        .eq('venue_id', venue.id)
+        .gte('match_date', dayStart)
+        .lte('match_date', dayEnd);
+      if (!error) setBusyHours((data || []).map(m => new Date(m.match_date).getHours()));
+    } catch (_) {}
   }
 
   async function fetchVenues() {
-    const { data } = await supabase.from('venues').select('*').order('name');
-    setVenues(data || []);
+    try {
+      const { data } = await supabase.from('venues').select('*').order('name');
+      setVenues(data || []);
+    } catch (_) {}
   }
 
   function goStep(n) {
@@ -79,33 +85,47 @@ export default function CreateMatchScreen({ navigation, route }) {
   }
 
   async function handleCreate() {
+    if (isSubmitting.current) return;
     if (!venue || !format || !date || !time) {
       Alert.alert('Eksik Bilgi', 'Tüm alanları doldurun.');
       return;
     }
     const dt = new Date(`${date}T${time}:00`);
     if (isNaN(dt.getTime())) { Alert.alert('Hata', 'Geçersiz tarih/saat.'); return; }
+    if (dt < new Date()) { Alert.alert('Geçersiz Tarih', 'Geçmiş bir tarih/saat seçemezsiniz.'); return; }
 
+    isSubmitting.current = true;
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const maxP = FORMATS.find(f => f.id === format)?.players || 10;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Hata', 'Oturum bulunamadı, lütfen tekrar giriş yapın.'); return; }
 
-    const { error, data: created } = await supabase.from('matches').insert({
-      venue_id:    venue.id,
-      organizer_id: user?.id,
-      format,
-      match_date:  dt.toISOString(),
-      max_players: maxP,
-      price:       price ? parseInt(price) : (venue.price_per_hour || 300),
-      status:      'open',
-    }).select().single();
+      const maxP = FORMATS.find(f => f.id === format)?.players || 10;
 
-    setLoading(false);
-    if (error) { Alert.alert('Hata', error.message); return; }
+      const { error, data: created } = await supabase.from('matches').insert({
+        venue_id:           venue.id,
+        organizer_id:       user.id,
+        format,
+        match_date:         dt.toISOString(),
+        max_players:        maxP,
+        price:              price ? parseInt(price) : (venue.price_per_hour || 300),
+        status:             'open',
+        is_seeking_players: isSeeking,
+        needed_positions:   isSeeking ? neededPositions : [],
+      }).select().single();
 
-    haptic('success');
-    launchConfetti();
-    setDone(true);
+      if (error) { Alert.alert('Hata', error.message); return; }
+
+      haptic('success');
+      launchConfetti();
+      setCreatedMatch(created);
+      setDone(true);
+    } catch (e) {
+      Alert.alert('Hata', 'Maç oluşturulamadı, tekrar dene.');
+    } finally {
+      setLoading(false);
+      isSubmitting.current = false;
+    }
   }
 
   function launchConfetti() {
@@ -158,7 +178,7 @@ export default function CreateMatchScreen({ navigation, route }) {
         <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
           <Text style={styles.shareBtnText}>Maçı Paylaş 📤</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.lineupBtn} onPress={() => navigation.navigate('Lineup')}>
+        <TouchableOpacity style={styles.lineupBtn} onPress={() => navigation.navigate('Lineup', { matchId: createdMatch?.id, format })}>
           <Text style={styles.lineupBtnText}>👥 Kadro Kur</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.homeBtn} onPress={() => navigation.navigate('Home')}>
@@ -322,7 +342,7 @@ export default function CreateMatchScreen({ navigation, route }) {
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
               value={price}
-              onChangeText={setPrice}
+              onChangeText={t => setPrice(t.replace(/[^0-9]/g, ''))}
             />
             {price ? <Text style={styles.priceHint}>💡 Oyuncu başı: {Math.ceil(parseInt(price) / (maxPlayers / 2))}₺</Text> : null}
 
