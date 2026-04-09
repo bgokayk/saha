@@ -165,7 +165,6 @@ export default function HomeScreen({ navigation }) {
       setSeekingMatches(seekingData || []);
       checkMatchReminders();
     } catch (err) {
-      console.warn('fetchData error:', err);
       Alert.alert('Hata', 'Veriler yüklenirken bir sorun oluştu.');
     }
     setLoading(false);

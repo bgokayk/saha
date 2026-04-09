@@ -100,18 +100,24 @@ export default function VenueAdminScreen({ navigation }) {
   // ── Loaders ──
   async function loadVenues() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    let q = supabase.from('venues').select('*').order('name');
-    if (user) q = q.eq('owner_id', user.id);
-    const { data, error } = await q;
-    if (error || !data || data.length === 0) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let q = supabase.from('venues').select('*').order('name');
+      if (user) q = q.eq('owner_id', user.id);
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) {
+        setVenues([]);
+        setSelected(null);
+      } else {
+        setVenues(data);
+        setSelected(data[0]);
+      }
+    } catch (err) {
       setVenues([]);
       setSelected(null);
-    } else {
-      setVenues(data);
-      setSelected(data[0]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function loadFeatures(venueId) {

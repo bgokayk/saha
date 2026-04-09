@@ -115,7 +115,6 @@ export default function DiscoverScreen({ navigation }) {
       setPlayers(data || []);
       setIndex(0);
     } catch (err) {
-      console.warn('fetchPlayers error:', err);
       Alert.alert('Hata', 'Oyuncular yüklenirken bir sorun oluştu.');
     } finally {
       setLoading(false);

@@ -66,38 +66,49 @@ export default function MarketScreen({ navigation, route }) {
     if (cartCount === 0) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('wallet_balance')
-          .eq('id', user.id)
-          .single();
-        const balance = prof?.wallet_balance ?? 0;
-        if (balance < total) {
-          Alert.alert('Yetersiz Bakiye', `Cüzdanınızda ${balance}₺ var, sipariş tutarı ${total}₺.`);
-          return;
-        }
+      if (!user) { Alert.alert('Giriş Gerekli', 'Sipariş vermek için giriş yapmalısınız.'); return; }
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', user.id)
+        .single();
+      const currentBalance = prof?.wallet_balance ?? 0;
+
+      if (currentBalance < total) {
+        Alert.alert(
+          'Yetersiz Bakiye',
+          `Bakiye: ${currentBalance}₺, Sipariş: ${total}₺\n\nCüzdanınıza para yükleyin.`,
+          [
+            { text: 'Tamam' },
+            { text: 'Cüzdana Git', onPress: () => navigation.navigate('Wallet') },
+          ]
+        );
+        return;
       }
+
       Alert.alert(
         'Sipariş Ver 🛒',
-        `Toplam: ${total}₺\nGörevli 5 dk içinde getirecek.`,
+        `Toplam: ${total}₺\nCüzdanınızdan düşülecek. Görevli 5 dk içinde getirecek.`,
         [
           { text: 'İptal', style: 'cancel' },
           { text: 'Onayla', onPress: async () => {
             try {
-              if (user && venueId) {
-                const { error } = await supabase.from('market_orders').insert({
+              const newBalance = currentBalance - total;
+              const [orderResult] = await Promise.all([
+                supabase.from('market_orders').insert({
                   venue_id: venueId,
                   user_id: user.id,
                   match_id: matchId || null,
                   items: cartList.map(({ product: p, qty }) => ({ id: p.id, name: p.name, qty, price: p.price })),
                   total,
                   status: 'pending',
-                });
-                if (error) { Alert.alert('Hata', 'Sipariş kaydedilemedi: ' + error.message); return; }
-              }
+                }),
+                supabase.from('profiles').update({ wallet_balance: newBalance }).eq('id', user.id),
+              ]);
+              if (orderResult.error) { Alert.alert('Hata', 'Sipariş kaydedilemedi: ' + orderResult.error.message); return; }
               clearCart();
-              Alert.alert('Sipariş Alındı! 🎉', 'Görevli 5 dk içinde getirecek. 🏃');
+              Alert.alert('Sipariş Alındı! 🎉', `${total}₺ cüzdanınızdan düşüldü. Görevli 5 dk içinde getirecek. 🏃`);
             } catch (e) {
               Alert.alert('Hata', 'Sipariş sırasında bir sorun oluştu.');
             }

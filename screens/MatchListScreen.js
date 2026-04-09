@@ -80,7 +80,6 @@ export default function MatchListScreen({ navigation }) {
       const { data } = await query;
       setMatches(data ?? []);
     } catch (err) {
-      console.warn('fetchMatches error:', err);
       Alert.alert('Hata', 'Maçlar yüklenirken bir sorun oluştu.');
     } finally {
       if (isRefresh) setRefreshing(false);
@@ -90,33 +89,83 @@ export default function MatchListScreen({ navigation }) {
 
   useEffect(() => { fetchMatches(); }, [fetchMatches]);
 
+  async function doJoinMatch(match, userId) {
+    const { error } = await supabase.from('match_players').insert({ match_id: match.id, user_id: userId });
+    if (error) {
+      if (error.code === '23505') {
+        setJoinedIds(prev => new Set([...prev, match.id]));
+        Alert.alert('Zaten Katıldın ⚽', '');
+      } else {
+        Alert.alert('Hata', error.message);
+      }
+      return false;
+    }
+    haptic('success');
+    setJoinedIds(prev => new Set([...prev, match.id]));
+    setMatches(prev => prev.map(m =>
+      m.id === match.id ? { ...m, current_players: (m.current_players || 0) + 1 } : m
+    ));
+    return true;
+  }
+
   async function handleJoin(match) {
     setJoiningId(match.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Giriş Gerekli', ''); return; }
-      if (joinedIds.has(match.id)) { Alert.alert('Zaten Katıldın ⚽', ''); return; }
+      if (!user) { Alert.alert('Giriş Gerekli', ''); setJoiningId(null); return; }
+      if (joinedIds.has(match.id)) { Alert.alert('Zaten Katıldın ⚽', ''); setJoiningId(null); return; }
 
-      const { error } = await supabase.from('match_players').insert({ match_id: match.id, user_id: user.id });
-      if (error) {
-        if (error.code === '23505') {
-          setJoinedIds(prev => new Set([...prev, match.id]));
-          Alert.alert('Zaten Katıldın ⚽', '');
-        } else {
-          Alert.alert('Hata', error.message);
-        }
-        return;
+      const maxP = match.max_players || 10;
+      const perPersonPrice = match.price > 0 ? Math.ceil(match.price / (maxP / 2)) : 0;
+
+      if (perPersonPrice > 0) {
+        Alert.alert(
+          'Maça Katıl',
+          `Bu maçın ücreti: ${perPersonPrice}₺\n\nCüzdandan ödemek ister misin?`,
+          [
+            { text: 'İptal', style: 'cancel', onPress: () => setJoiningId(null) },
+            { text: 'Ücretsiz Katıl', onPress: async () => {
+              await doJoinMatch(match, user.id);
+              setJoiningId(null);
+            }},
+            { text: `${perPersonPrice}₺ Öde`, onPress: async () => {
+              try {
+                const { data: prof } = await supabase.from('profiles').select('wallet_balance').eq('id', user.id).single();
+                const currentBalance = prof?.wallet_balance ?? 0;
+                if (currentBalance < perPersonPrice) {
+                  Alert.alert(
+                    'Yetersiz Bakiye',
+                    `Bakiye: ${currentBalance}₺, Maç ücreti: ${perPersonPrice}₺\n\nCüzdanınıza para yükleyin.`,
+                    [
+                      { text: 'Tamam' },
+                      { text: 'Cüzdana Git', onPress: () => navigation.navigate('Wallet') },
+                    ]
+                  );
+                  setJoiningId(null);
+                  return;
+                }
+                const newBalance = currentBalance - perPersonPrice;
+                await supabase.from('profiles').update({ wallet_balance: newBalance }).eq('id', user.id);
+                const joined = await doJoinMatch(match, user.id);
+                if (!joined) {
+                  // Rollback
+                  await supabase.from('profiles').update({ wallet_balance: currentBalance }).eq('id', user.id);
+                } else {
+                  Alert.alert('Maça Katıldın! ⚽', `${perPersonPrice}₺ cüzdanınızdan düşüldü.`);
+                }
+              } catch (e) {
+                Alert.alert('Hata', 'Ödeme sırasında bir sorun oluştu.');
+              }
+              setJoiningId(null);
+            }},
+          ]
+        );
+      } else {
+        await doJoinMatch(match, user.id);
+        setJoiningId(null);
       }
-      // Trigger handles DB update — only update local UI state
-      haptic('success');
-      setJoinedIds(prev => new Set([...prev, match.id]));
-      setMatches(prev => prev.map(m =>
-        m.id === match.id ? { ...m, current_players: (m.current_players || 0) + 1 } : m
-      ));
     } catch (err) {
-      console.warn('handleJoin error:', err);
       Alert.alert('Hata', 'Katılım sırasında bir sorun oluştu.');
-    } finally {
       setJoiningId(null);
     }
   }
@@ -124,19 +173,24 @@ export default function MatchListScreen({ navigation }) {
   async function handleApply() {
     if (!applyMatch || !applyPosition) return;
     setApplying(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { Alert.alert('Giriş Gerekli', ''); setApplying(false); return; }
-    const { error } = await supabase.from('match_applications').insert({
-      match_id: applyMatch.id, user_id: user.id,
-      position: applyPosition, message: applyMessage, status: 'pending',
-    });
-    setApplying(false); setApplyModal(false); setApplyMessage(''); setApplyPosition('');
-    if (error) {
-      if (error.code === '23505') Alert.alert('Zaten Başvurdun ✓', '');
-      else Alert.alert('Hata', error.message);
-    } else {
-      haptic('success');
-      Alert.alert('Başvurun Alındı! 🎉', 'Maç organizatörü seni onaylayacak.');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Giriş Gerekli', ''); setApplying(false); return; }
+      const { error } = await supabase.from('match_applications').insert({
+        match_id: applyMatch.id, user_id: user.id,
+        position: applyPosition, message: applyMessage, status: 'pending',
+      });
+      setApplying(false); setApplyModal(false); setApplyMessage(''); setApplyPosition('');
+      if (error) {
+        if (error.code === '23505') Alert.alert('Zaten Başvurdun ✓', '');
+        else Alert.alert('Hata', error.message);
+      } else {
+        haptic('success');
+        Alert.alert('Başvurun Alındı! 🎉', 'Maç organizatörü seni onaylayacak.');
+      }
+    } catch (err) {
+      setApplying(false); setApplyModal(false);
+      Alert.alert('Hata', 'Başvuru sırasında bir sorun oluştu.');
     }
   }
 

@@ -76,7 +76,6 @@ export default function VenueDetailScreen({ navigation, route }) {
       const hours = (matchRes.data || []).map(m => new Date(m.match_date).getHours());
       setBusyHours(hours);
     } catch (err) {
-      console.warn('VenueDetail load error:', err);
       Alert.alert('Hata', 'Saha bilgileri y\u00FCklenemedi.');
     } finally {
       setLoading(false);

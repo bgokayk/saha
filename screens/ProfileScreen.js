@@ -2,7 +2,6 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Animated, Alert, Modal, TextInput, Platform, Image
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
@@ -59,6 +58,8 @@ export default function ProfileScreen({ navigation, route }) {
   const [editPhone, setEditPhone] = useState('');
   const [saving, setSaving]         = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [isPremium, setIsPremium]         = useState(false);
 
   // Animasyonlar
   const xpAnim    = useRef(new Animated.Value(0)).current;
@@ -131,6 +132,8 @@ export default function ProfileScreen({ navigation, route }) {
       if (!id) { setLoading(false); return; }
       const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
       setProfile(data);
+      setWalletBalance(data?.wallet_balance ?? 0);
+      setIsPremium(data?.is_premium ?? false);
       fetchMatchHistory(id);
     } catch (e) {
       console.error('fetchProfile error:', e);
@@ -193,6 +196,7 @@ export default function ProfileScreen({ navigation, route }) {
       Alert.alert('Bilgi', 'Fotoğraf yükleme mobil uygulamadan yapılabilir.');
       return;
     }
+    const ImagePicker = require('expo-image-picker');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('İzin Gerekli', 'Fotoğraf seçmek için galeri iznine ihtiyaç var.');
@@ -385,6 +389,27 @@ export default function ProfileScreen({ navigation, route }) {
             <Animated.View style={[styles.xpBarFill, { width: xpBarWidth, backgroundColor: level.color }]} />
           </View>
         </Animated.View>
+
+        {/* ── Cüzdan Satırı ── */}
+        {!profileId && (
+          <TouchableOpacity style={styles.walletRow} onPress={() => navigation.navigate('Wallet')}>
+            <View style={styles.walletLeft}>
+              <Text style={styles.walletIcon}>💳</Text>
+              <View>
+                <Text style={styles.walletLabel}>SAHA CÜZDANı</Text>
+                <Text style={styles.walletAmount}>{walletBalance ?? 0}₺</Text>
+              </View>
+            </View>
+            <View style={styles.walletRight}>
+              {isPremium && (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeText}>✨ PRO</Text>
+                </View>
+              )}
+              <Text style={styles.walletArrow}>→</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ── Stat Kartları ── */}
         <Animated.View style={[styles.statsGrid, { opacity: statsAnim }]}>
@@ -790,4 +815,15 @@ const styles = StyleSheet.create({
   emptyHistoryIcon:   { fontSize: 48 },
   emptyHistoryText:   { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
   emptyHistoryLink:   { color: '#00D4FF', fontSize: 14, fontWeight: '600' },
+
+  // Wallet Row
+  walletRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0F1E35', marginHorizontal: 16, marginBottom: 12, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  walletLeft:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  walletIcon:   { fontSize: 24 },
+  walletLabel:  { color: '#00D4FF', fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 2 },
+  walletAmount: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  walletRight:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  walletArrow:  { color: '#00D4FF', fontSize: 18, fontWeight: '700' },
+  proBadge:     { backgroundColor: '#FFB800', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  proBadgeText: { color: '#0A1628', fontSize: 11, fontWeight: '800' },
 });

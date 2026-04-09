@@ -59,14 +59,44 @@ export default function WalletScreen({ navigation }) {
     }
   }
 
-  function handleTopUp() {
+  async function handleTopUp() {
     if (!selected) { Alert.alert('Paket Seç', 'Lütfen bir yükleme paketi seçin.'); return; }
-    const pkg = PACKAGES.find(p => p.amount === selected);
-    Alert.alert('Ödeme', `${pkg.label}${pkg.bonus ? ` (${pkg.bonus} bonus)` : ''} paketi için ödeme sistemi yakında iyzico entegrasyonu ile aktif olacak.`, [{ text: 'Tamam' }]);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Hata', 'Oturum bulunamadı.'); return; }
+      const { data: prof } = await supabase.from('profiles').select('wallet_balance').eq('id', user.id).single();
+      const newBalance = (prof?.wallet_balance || 0) + selected;
+      await supabase.from('profiles').update({ wallet_balance: newBalance }).eq('id', user.id);
+      setBalance(newBalance);
+      setSelected(null);
+      Alert.alert('Başarılı! 💰', `${selected}₺ cüzdanınıza eklendi.\n\nNot: Gerçek ödeme sistemi (iyzico) yakında aktif olacak.`);
+    } catch (e) {
+      Alert.alert('Hata', 'Bakiye yüklenemedi.');
+    }
   }
 
-  function handlePremium() {
-    Alert.alert('⭐ Premium Üyelik', 'Premium üyelik için ödeme sistemi yakında aktif olacak.', [{ text: 'Tamam' }]);
+  async function handlePremium() {
+    if (isPremium) { Alert.alert('Zaten Premium ✨', 'SAHA PRO üyeliğiniz aktif!'); return; }
+    if ((balance ?? 0) < 49) {
+      Alert.alert('Yetersiz Bakiye', 'Premium için en az 49₺ bakiye gerekiyor.');
+      return;
+    }
+    Alert.alert('Premium Ol', '49₺ cüzdanınızdan düşülecek. Onaylıyor musunuz?', [
+      { text: 'İptal', style: 'cancel' },
+      { text: 'Onayla', onPress: async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const newBal = (balance ?? 0) - 49;
+          await supabase.from('profiles').update({ wallet_balance: newBal, is_premium: true }).eq('id', user.id);
+          setBalance(newBal);
+          setIsPremium(true);
+          Alert.alert('Tebrikler! ✨', 'SAHA PRO üyesi oldun!');
+        } catch (e) {
+          Alert.alert('Hata', 'İşlem gerçekleştirilemedi.');
+        }
+      }},
+    ]);
   }
 
   return (

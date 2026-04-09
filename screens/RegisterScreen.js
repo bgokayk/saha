@@ -55,7 +55,6 @@ export default function RegisterScreen({ navigation }) {
         }, { onConflict: 'id', ignoreDuplicates: false });
 
         if (profileError) {
-          console.warn('Profil güncellenemedi:', profileError.message);
         }
       }
 

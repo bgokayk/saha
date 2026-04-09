@@ -47,7 +47,6 @@ export default function MatchDetailScreen({ navigation, route }) {
       setMatch(m);
       setPlayers(mp || []);
     } catch (err) {
-      console.warn('load error:', err);
       Alert.alert('Hata', 'Maç bilgileri yüklenirken bir sorun oluştu.');
     } finally {
       setLoading(false);
@@ -64,19 +63,75 @@ export default function MatchDetailScreen({ navigation, route }) {
     );
   }
 
-  async function handleJoin() {
-    if (!myId) { Alert.alert('Giriş Gerekli', 'Önce giriş yap.'); return; }
-    setActionLoading(true);
+  async function joinMatchFree() {
     const { error } = await supabase.from('match_players').insert({ match_id: matchId, user_id: myId });
     if (error) {
       if (error.code === '23505') Alert.alert('Zaten Katıldın ⚽', '');
       else Alert.alert('Hata', error.message);
     } else {
-      // Trigger handles current_players increment automatically
       haptic('success');
       load();
     }
-    setActionLoading(false);
+  }
+
+  async function joinMatchWithPayment(perPersonPrice) {
+    try {
+      const { data: prof } = await supabase.from('profiles').select('wallet_balance').eq('id', myId).single();
+      const currentBalance = prof?.wallet_balance ?? 0;
+      if (currentBalance < perPersonPrice) {
+        Alert.alert(
+          'Yetersiz Bakiye',
+          `Bakiye: ${currentBalance}₺, Maç ücreti: ${perPersonPrice}₺\n\nCüzdanınıza para yükleyin.`,
+          [
+            { text: 'Tamam' },
+            { text: 'Cüzdana Git', onPress: () => navigation.navigate('Wallet') },
+          ]
+        );
+        return;
+      }
+      const newBalance = currentBalance - perPersonPrice;
+      await supabase.from('profiles').update({ wallet_balance: newBalance }).eq('id', myId);
+      const { error } = await supabase.from('match_players').insert({ match_id: matchId, user_id: myId });
+      if (error) {
+        // Rollback balance
+        await supabase.from('profiles').update({ wallet_balance: currentBalance }).eq('id', myId);
+        if (error.code === '23505') Alert.alert('Zaten Katıldın ⚽', '');
+        else Alert.alert('Hata', error.message);
+      } else {
+        haptic('success');
+        Alert.alert('Maça Katıldın! ⚽', `${perPersonPrice}₺ cüzdanınızdan düşüldü.`);
+        load();
+      }
+    } catch (e) {
+      Alert.alert('Hata', 'Ödeme sırasında bir sorun oluştu.');
+    }
+  }
+
+  async function handleJoin() {
+    if (!myId) { Alert.alert('Giriş Gerekli', 'Önce giriş yap.'); return; }
+    setActionLoading(true);
+    try {
+      const maxP = match?.max_players || 10;
+      const perPersonPrice = match?.price > 0 ? Math.ceil(match.price / (maxP / 2)) : 0;
+
+      if (perPersonPrice > 0) {
+        Alert.alert(
+          'Maça Katıl',
+          `Bu maçın ücreti: ${perPersonPrice}₺\n\nCüzdandan ödemek ister misin?`,
+          [
+            { text: 'İptal', style: 'cancel', onPress: () => setActionLoading(false) },
+            { text: 'Ücretsiz Katıl', onPress: async () => { await joinMatchFree(); setActionLoading(false); } },
+            { text: `${perPersonPrice}₺ Öde`, onPress: async () => { await joinMatchWithPayment(perPersonPrice); setActionLoading(false); } },
+          ]
+        );
+      } else {
+        await joinMatchFree();
+        setActionLoading(false);
+      }
+    } catch (err) {
+      Alert.alert('Hata', 'Katılım sırasında bir sorun oluştu.');
+      setActionLoading(false);
+    }
   }
 
   async function handleLeave() {
@@ -91,7 +146,6 @@ export default function MatchDetailScreen({ navigation, route }) {
           haptic();
           await load();
         } catch (err) {
-          console.warn('handleLeave error:', err);
           Alert.alert('Hata', 'Maçtan ayrılırken bir sorun oluştu.');
         } finally {
           setActionLoading(false);
@@ -110,7 +164,6 @@ export default function MatchDetailScreen({ navigation, route }) {
           haptic('success');
           await load();
         } catch (err) {
-          console.warn('handleEndMatch error:', err);
           Alert.alert('Hata', 'Maç bitirilirken bir sorun oluştu.');
         }
       }},
