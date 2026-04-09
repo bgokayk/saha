@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,8 +25,11 @@ export default function SplashScreen({ navigation }) {
 
       <View style={styles.hero}>
         <Animated.View style={[styles.logoWrap, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
-          <Text style={styles.logoEmoji}>⚽</Text>
-          <Text style={styles.logoTitle}>SAHA</Text>
+          <Image
+            source={require('../assets/logo-dark.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.logoBy}>by LumenCo.</Text>
         </Animated.View>
       </View>
@@ -60,9 +63,8 @@ const styles = StyleSheet.create({
 
   hero:         { flex: 1, justifyContent: 'center', alignItems: 'center' },
   logoWrap:     { alignItems: 'center', gap: 8 },
-  logoEmoji:    { fontSize: 72 },
-  logoTitle:    { color: '#FFFFFF', fontSize: 56, fontWeight: '900', letterSpacing: 12 },
-  logoBy:       { color: '#00D4FF', fontSize: 12, letterSpacing: 4, marginTop: 4 },
+  logoImage:    { width: 240, height: 90 },
+  logoBy:       { color: '#00D4FF', fontSize: 12, letterSpacing: 4, marginTop: 12 },
 
   bottomSection:{ gap: 12, paddingBottom: 12 },
 
