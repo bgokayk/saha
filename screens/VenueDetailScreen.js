@@ -2,291 +2,585 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, Linking, Platform
 } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
+/* ── Feature tanımlari ─────────────────────────────────── */
 const FEATURES = [
-  { key: 'has_camera',     icon: '📹', label: 'Kamera' },
-  { key: 'has_referee',    icon: '👔', label: 'Hakem' },
-  { key: 'is_indoor',      icon: '🏠', label: 'Kapalı' },
-  { key: 'has_lighting',   icon: '💡', label: 'Işık' },
-  { key: 'has_shower',     icon: '🚿', label: 'Duş' },
-  { key: 'has_parking',    icon: '🚗', label: 'Otopark' },
-  { key: 'has_scoreboard', icon: '📊', label: 'Skor' },
-  { key: 'has_wifi',       icon: '📶', label: 'WiFi' },
+  { key: 'has_camera',     icon: '\u{1F4F9}', label: 'Kamera'        },
+  { key: 'has_referee',    icon: '\u{1F454}', label: 'Hakem'         },
+  { key: 'is_indoor',      icon: '\u{1F3E0}', label: 'Kapal\u0131 Alan'    },
+  { key: 'has_lighting',   icon: '\u{1F4A1}', label: '\u0130\u015F\u0131kland\u0131rma' },
+  { key: 'has_scoreboard', icon: '\u{1F4CA}', label: 'Skor Tabelas\u0131'  },
+  { key: 'has_shower',     icon: '\u{1F6BF}', label: 'Du\u015F/Soyunma'    },
+  { key: 'has_parking',    icon: '\u{1F697}', label: 'Otopark'       },
 ];
 
-const HEADER_COLORS = [
-  ['#001F5B', '#00A0D2'],
-  ['#0F172A', '#3B82F6'],
-  ['#134E4A', '#10B981'],
-  ['#1E1B4B', '#8B5CF6'],
-  ['#431407', '#F59E0B'],
-];
+const HOURS = Array.from({ length: 16 }, (_, i) => i + 8); // 08-23
 
-function hashColor(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
-  return HEADER_COLORS[Math.abs(h) % HEADER_COLORS.length];
+function padHour(h) {
+  return `${String(h).padStart(2, '0')}:00`;
 }
 
+function todayDateStr() {
+  const d = new Date();
+  return d.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function todayLabel() {
+  const d = new Date();
+  return d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+/* ── Component ─────────────────────────────────────────── */
 export default function VenueDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { venueId, venue: preloaded } = route.params || {};
+  const id = venueId || preloaded?.id;
 
-  const [venue, setVenue]       = useState(preloaded || null);
-  const [features, setFeatures] = useState(null);
-  const [ratings, setRatings]   = useState([]);
-  const [loading, setLoading]   = useState(!preloaded);
-  const [avgRating, setAvgRating] = useState(null);
+  const [venue, setVenue]           = useState(preloaded || null);
+  const [features, setFeatures]     = useState(null);
+  const [busyHours, setBusyHours]   = useState([]);
+  const [selectedHour, setSelectedHour] = useState(null);
+  const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
-    const id = venueId || preloaded?.id;
     if (!id) return;
-    load(id);
-  }, [venueId]);
+    loadData(id);
+  }, [id]);
 
-  async function load(id) {
+  async function loadData(venueId) {
     setLoading(true);
     try {
-      const [{ data: v }, { data: f }, { data: r }] = await Promise.all([
-        supabase.from('venues').select('*').eq('id', id).single(),
-        supabase.from('venue_features').select('*').eq('venue_id', id).maybeSingle(),
+      const today = todayDateStr();
+      const todayStart = `${today}T00:00:00`;
+      const todayEnd   = `${today}T23:59:59`;
+
+      const [venueRes, featRes, matchRes] = await Promise.all([
+        supabase.from('venues').select('*').eq('id', venueId).single(),
+        supabase.from('venue_features').select('*').eq('venue_id', venueId).maybeSingle(),
         supabase
-          .from('match_ratings')
-          .select('*, profiles(full_name, avatar_url)')
-          .eq('venue_id', id)
-          .order('created_at', { ascending: false })
-          .limit(20),
+          .from('matches')
+          .select('match_date')
+          .eq('venue_id', venueId)
+          .gte('match_date', todayStart)
+          .lte('match_date', todayEnd)
+          .neq('status', 'cancelled'),
       ]);
-      if (v) setVenue(v);
-      setFeatures(f || {});
-      setRatings(r || []);
-      if (r && r.length > 0) {
-        const avg = r.reduce((s, x) => s + (x.overall_rating || x.rating || 0), 0) / r.length;
-        setAvgRating(avg.toFixed(1));
-      }
+
+      if (venueRes.data) setVenue(venueRes.data);
+      setFeatures(featRes.data || {});
+
+      // Dolu saatleri cikart
+      const hours = (matchRes.data || []).map(m => new Date(m.match_date).getHours());
+      setBusyHours(hours);
     } catch (err) {
-      Alert.alert('Hata', 'Saha bilgileri yüklenemedi.');
+      console.warn('VenueDetail load error:', err);
+      Alert.alert('Hata', 'Saha bilgileri y\u00FCklenemedi.');
     } finally {
       setLoading(false);
     }
   }
 
+  /* Feature source: venue_features varsa oradan, yoksa venues tablosundan */
+  const featureSource = useMemo(() => {
+    if (features && Object.keys(features).length > 0) return features;
+    return venue || {};
+  }, [features, venue]);
+
   function openWhatsApp() {
-    const phone = venue?.phone || '';
-    const text  = encodeURIComponent(`Merhaba, ${venue?.name} hakkında bilgi almak istiyorum.`);
-    const url   = phone
-      ? `whatsapp://send?phone=${phone}&text=${text}`
-      : `https://wa.me/?text=${text}`;
+    if (!venue?.phone) {
+      Alert.alert('Bilgi', 'Bu sahan\u0131n telefon numaras\u0131 bulunamad\u0131.');
+      return;
+    }
+    const cleanPhone = venue.phone.replace(/\D/g, '');
+    const phone = cleanPhone.startsWith('90') ? cleanPhone : `90${cleanPhone}`;
+    const text = encodeURIComponent(`Merhaba, ${venue.name} hakk\u0131nda bilgi almak istiyorum.`);
+    const url = Platform.OS === 'web'
+      ? `https://wa.me/${phone}?text=${text}`
+      : `whatsapp://send?phone=+${phone}&text=${text}`;
+
     if (Platform.OS === 'web') {
-      window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+      window.open(url, '_blank');
     } else {
-      Linking.openURL(url).catch(() => Alert.alert('WhatsApp bulunamadı'));
+      Linking.openURL(url).catch(() => Alert.alert('Hata', 'WhatsApp a\u00E7\u0131lamad\u0131.'));
     }
   }
 
-  function goReserve() {
+  function handleSlotPress(hour) {
+    if (busyHours.includes(hour)) return;
+    setSelectedHour(prev => (prev === hour ? null : hour));
+  }
+
+  function handleJoin() {
+    if (selectedHour == null) return;
+    navigation.navigate('CreateMatch', {
+      preselectedVenue: venue,
+      preselectedHour: selectedHour,
+    });
+  }
+
+  function handleReserve() {
     navigation.navigate('CreateMatch', { preselectedVenue: venue });
   }
 
-  if (loading || !venue) {
+  /* ── Loading ── */
+  if (loading && !venue) {
     return (
       <View style={[styles.loadWrap, { paddingTop: insets.top }]}>
-        <ActivityIndicator color="#00A0D2" size="large" />
+        <ActivityIndicator color="#00D4FF" size="large" />
       </View>
     );
   }
 
-  const colors = hashColor(venue.name || 'saha');
+  if (!venue) {
+    return (
+      <View style={[styles.loadWrap, { paddingTop: insets.top }]}>
+        <Text style={styles.errorText}>Saha bulunamad\u0131.</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.errorBack}>Geri D\u00F6n</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[0]}>
-        {/* Gradient Header */}
-        <View style={[styles.heroWrap, { paddingTop: insets.top }]}>
-          <View style={[styles.heroGrad, { backgroundColor: colors[0] }]}>
-            <View style={[styles.heroAccent, { backgroundColor: colors[1] + '40' }]} />
-            <View style={styles.heroOverlay}>
-              <View style={styles.heroIconWrap}>
-                <Text style={styles.heroIcon}>🏟️</Text>
-              </View>
-              <Text style={styles.heroName}>{venue.name}</Text>
-              <Text style={styles.heroLocation}>
-                📍 {[venue.district, venue.city].filter(Boolean).join(', ') || 'Bursa'}
-              </Text>
-              {(avgRating || venue.rating) && (
-                <View style={styles.heroRating}>
-                  <Text style={styles.heroRatingStar}>⭐</Text>
-                  <Text style={styles.heroRatingVal}>{avgRating || Number(venue.rating || 0).toFixed(1)}</Text>
-                  <Text style={styles.heroRatingCount}>({ratings.length} yorum)</Text>
-                </View>
-              )}
-            </View>
+      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+
+        {/* ── Hero Section ── */}
+        <View style={[styles.hero, { paddingTop: insets.top }]}>
+          <View style={styles.heroGradient}>
+            <View style={styles.heroAccent} />
           </View>
 
-          {/* Geri butonu - header'ın üstünde */}
+          {/* Back button */}
           <TouchableOpacity
             style={[styles.backBtn, { top: insets.top + 10 }]}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <Text style={styles.backBtnText}>←</Text>
+            <Text style={styles.backBtnText}>{'\u2190'}</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Fiyat & saatler */}
-        <View style={styles.infoRow}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardIcon}>💳</Text>
-            <Text style={styles.infoCardVal}>{venue.price_per_hour || '—'}₺</Text>
-            <Text style={styles.infoCardLabel}>Saatlik</Text>
+          {/* Venue info overlay */}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroEmoji}>{'\u{1F3DF}\uFE0F'}</Text>
+            <Text style={styles.heroName}>{venue.name}</Text>
+            <Text style={styles.heroLocation}>
+              {'\u{1F4CD}'} {[venue.district, venue.city].filter(Boolean).join(', ') || 'Bursa'}
+            </Text>
           </View>
-          {features?.working_hours && (
-            <View style={styles.infoCard}>
-              <Text style={styles.infoCardIcon}>🕐</Text>
-              <Text style={styles.infoCardVal}>{features.working_hours}</Text>
-              <Text style={styles.infoCardLabel}>Çalışma Saati</Text>
-            </View>
-          )}
-          {features?.ground_type && (
-            <View style={styles.infoCard}>
-              <Text style={styles.infoCardIcon}>⚽</Text>
-              <Text style={styles.infoCardVal}>{features.ground_type}</Text>
-              <Text style={styles.infoCardLabel}>Zemin</Text>
-            </View>
-          )}
-          {features?.field_size && (
-            <View style={styles.infoCard}>
-              <Text style={styles.infoCardIcon}>📐</Text>
-              <Text style={styles.infoCardVal}>{features.field_size}</Text>
-              <Text style={styles.infoCardLabel}>Saha</Text>
-            </View>
-          )}
         </View>
 
-        {/* Özellikler Grid */}
+        {/* ── Info Card ── */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            {/* Rating */}
+            <View style={styles.infoItem}>
+              <Text style={styles.infoStar}>{'\u2B50'}</Text>
+              <Text style={styles.infoRating}>
+                {venue.rating ? Number(venue.rating).toFixed(1) : '5.0'}
+              </Text>
+              <Text style={styles.infoGray}>puan</Text>
+            </View>
+
+            <View style={styles.infoDivider} />
+
+            {/* Price */}
+            <View style={styles.infoItem}>
+              <Text style={styles.infoPrice}>{venue.price_per_hour || '---'}{'\u20BA'}</Text>
+              <Text style={styles.infoGray}>/ saat</Text>
+            </View>
+          </View>
+
+          {/* Working hours */}
+          {features?.working_hours && (
+            <View style={styles.workingHours}>
+              <Text style={styles.workingHoursIcon}>{'\u{1F570}\uFE0F'}</Text>
+              <Text style={styles.workingHoursText}>
+                {`\u00C7al\u0131\u015Fma Saatleri: ${features.working_hours}`}
+              </Text>
+            </View>
+          )}
+
+          {/* Action buttons */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.waBtn} onPress={openWhatsApp} activeOpacity={0.85}>
+              <Text style={styles.waBtnText}>{`WhatsApp'a Yaz \u{1F4AC}`}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.reserveBtn} onPress={handleReserve} activeOpacity={0.85}>
+              <Text style={styles.reserveBtnText}>Rezervasyon Yap {'\u2192'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Facility Features ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tesis Özellikleri</Text>
+          <Text style={styles.sectionTitle}>{`TES\u0130S \u00D6ZELL\u0130KLER\u0130`}</Text>
           <View style={styles.featGrid}>
             {FEATURES.map(f => {
-              const active = features?.[f.key] === true;
+              const active = featureSource[f.key] === true;
               return (
-                <View key={f.key} style={[styles.featCell, !active && styles.featCellOff]}>
-                  <Text style={[styles.featIcon, !active && styles.featIconOff]}>{f.icon}</Text>
-                  <Text style={[styles.featLabel, !active && styles.featLabelOff]}>{f.label}</Text>
-                  {!active && <View style={styles.featOffLine} />}
+                <View
+                  key={f.key}
+                  style={[
+                    styles.featCell,
+                    active ? styles.featCellActive : styles.featCellInactive,
+                  ]}
+                >
+                  <Text style={[styles.featIcon, !active && styles.featIconOff]}>
+                    {f.icon}
+                  </Text>
+                  <Text style={[styles.featLabel, !active && styles.featLabelOff]}>
+                    {f.label}
+                  </Text>
                 </View>
               );
             })}
           </View>
         </View>
 
-        {/* Yorumlar */}
-        {ratings.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Yorumlar</Text>
-            {ratings.map(r => (
-              <RatingRow key={r.id} rating={r} />
-            ))}
+        {/* ── Time Slot Grid (Olleyy Style) ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{`M\u00DCSA\u0130T SAATLER`}</Text>
+          <Text style={styles.dateLabel}>{todayLabel()}</Text>
+
+          <View style={styles.slotGrid}>
+            {HOURS.map(hour => {
+              const isBusy    = busyHours.includes(hour);
+              const isSelected = selectedHour === hour;
+
+              return (
+                <TouchableOpacity
+                  key={hour}
+                  style={[
+                    styles.slot,
+                    isBusy    && styles.slotBusy,
+                    isSelected && styles.slotSelected,
+                  ]}
+                  onPress={() => handleSlotPress(hour)}
+                  activeOpacity={isBusy ? 1 : 0.7}
+                  disabled={isBusy}
+                >
+                  <Text
+                    style={[
+                      styles.slotText,
+                      isBusy    && styles.slotTextBusy,
+                      isSelected && styles.slotTextSelected,
+                    ]}
+                  >
+                    {padHour(hour)}
+                  </Text>
+                  {isBusy && <Text style={styles.slotBusyLabel}>Dolu</Text>}
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        )}
 
-        {ratings.length === 0 && (
-          <View style={styles.noRatingWrap}>
-            <Text style={styles.noRatingText}>Henüz yorum yok. İlk maçı oyna, sen değerlendir!</Text>
-          </View>
-        )}
-
-        <View style={{ height: 120 }} />
-      </ScrollView>
-
-      {/* Alt butonlar */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity style={styles.waBtn} onPress={openWhatsApp}>
-          <Text style={styles.waBtnText}>💬 WhatsApp</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.reserveBtn} onPress={goReserve}>
-          <Text style={styles.reserveBtnText}>⚽ Rezervasyon Yap</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function RatingRow({ rating }) {
-  const stars = Math.round(rating.overall_rating || rating.rating || 0);
-  const name  = rating.profiles?.full_name || 'Oyuncu';
-  const comment = rating.comment || '';
-  return (
-    <View style={styles.ratingRow}>
-      <View style={styles.ratingAvatar}>
-        <Text style={styles.ratingAvatarText}>{name.charAt(0).toUpperCase()}</Text>
-      </View>
-      <View style={styles.ratingBody}>
-        <View style={styles.ratingTop}>
-          <Text style={styles.ratingName}>{name}</Text>
-          <Text style={styles.ratingStars}>{'⭐'.repeat(Math.min(stars, 5))}</Text>
+          {/* Join button */}
+          {selectedHour != null && (
+            <TouchableOpacity style={styles.joinBtn} onPress={handleJoin} activeOpacity={0.85}>
+              <Text style={styles.joinBtnText}>{`Kat\u0131l \u2192`}</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {comment ? <Text style={styles.ratingComment}>{comment}</Text> : null}
-      </View>
+
+        {/* Address */}
+        {venue.address && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ADRES</Text>
+            <Text style={styles.addressText}>{venue.address}</Text>
+          </View>
+        )}
+
+        {/* Description */}
+        {venue.description && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>HAKKINDA</Text>
+            <Text style={styles.descText}>{venue.description}</Text>
+          </View>
+        )}
+
+        <View style={{ height: Math.max(insets.bottom, 16) + 20 }} />
+      </ScrollView>
     </View>
   );
 }
+
+/* ── Styles ────────────────────────────────────────────── */
+const NAVY   = '#0A1628';
+const NAVY2  = '#0F1E35';
+const CYAN   = '#00D4FF';
+const GOLD   = '#FFB800';
+const GRAY   = '#8B9BB4';
+const BORDER = 'rgba(0,212,255,0.15)';
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
-  loadWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: NAVY },
+  loadWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: NAVY },
+  errorText: { color: GRAY, fontSize: 15, marginBottom: 12, textAlign: 'center' },
+  errorBack: { color: CYAN, fontSize: 14, fontWeight: '700' },
 
-  heroWrap: { position: 'relative' },
-  heroGrad: { paddingBottom: 28, overflow: 'hidden' },
-  heroAccent: { position: 'absolute', top: -40, right: -40, width: 180, height: 180, borderRadius: 90 },
-  heroOverlay: { alignItems: 'center', paddingTop: 16, paddingBottom: 8, paddingHorizontal: 20 },
-  heroIconWrap: { width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  heroIcon: { fontSize: 40 },
-  heroName: { color: '#fff', fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
-  heroLocation: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginBottom: 10 },
-  heroRating: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  heroRatingStar: { fontSize: 14 },
-  heroRatingVal: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  heroRatingCount: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  /* Hero */
+  hero: {
+    height: 220,
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: NAVY,
+  },
+  heroAccent: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    height: 120,
+    backgroundColor: NAVY2,
+    opacity: 0.6,
+  },
+  heroContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  heroEmoji: {
+    fontSize: 36,
+    marginBottom: 8,
+  },
+  heroName: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  heroLocation: {
+    color: GRAY,
+    fontSize: 13,
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  backBtnText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
 
-  backBtn: { position: 'absolute', left: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
-  backBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  /* Info Card */
+  infoCard: {
+    backgroundColor: NAVY2,
+    marginHorizontal: 16,
+    marginTop: -10,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    paddingHorizontal: 16,
+  },
+  infoDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  infoStar:   { fontSize: 16 },
+  infoRating: { color: GOLD, fontSize: 20, fontWeight: '900' },
+  infoGray:   { color: GRAY, fontSize: 12 },
+  infoPrice:  { color: GOLD, fontSize: 20, fontWeight: '900' },
 
-  infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 16 },
-  infoCard: { flex: 1, minWidth: 80, backgroundColor: '#fff', borderRadius: 14, padding: 12, alignItems: 'center', gap: 4, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
-  infoCardIcon: { fontSize: 20 },
-  infoCardVal: { fontSize: 14, fontWeight: '800', color: '#001F5B', textAlign: 'center' },
-  infoCardLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
+  workingHours: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  workingHoursIcon: { fontSize: 14 },
+  workingHoursText: { color: GRAY, fontSize: 12 },
 
-  section: { paddingHorizontal: 16, marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#001F5B', marginBottom: 12 },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  waBtn: {
+    flex: 1,
+    backgroundColor: '#25D366',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  waBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reserveBtn: {
+    flex: 1,
+    backgroundColor: CYAN,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: CYAN,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  reserveBtnText: {
+    color: NAVY,
+    fontSize: 13,
+    fontWeight: '800',
+  },
 
-  featGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  featCell: { width: '22%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 6, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, borderWidth: 1.5, borderColor: '#E2E8F0' },
-  featCellOff: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
-  featIcon: { fontSize: 22 },
-  featIconOff: { opacity: 0.3 },
-  featLabel: { fontSize: 11, fontWeight: '700', color: '#001F5B' },
-  featLabelOff: { color: '#CBD5E1' },
-  featOffLine: { position: 'absolute', top: '50%', left: '10%', right: '10%', height: 1.5, backgroundColor: '#CBD5E1', transform: [{ rotate: '-15deg' }] },
+  /* Section */
+  section: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: CYAN,
+    letterSpacing: 2,
+    marginBottom: 12,
+  },
 
-  ratingRow: { flexDirection: 'row', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  ratingAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#001F5B', justifyContent: 'center', alignItems: 'center' },
-  ratingAvatarText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  ratingBody: { flex: 1, gap: 4 },
-  ratingTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ratingName: { fontSize: 13, fontWeight: '700', color: '#001F5B' },
-  ratingStars: { fontSize: 12 },
-  ratingComment: { fontSize: 13, color: '#64748B', lineHeight: 18 },
+  /* Features Grid */
+  featGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  featCell: {
+    width: '47%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: NAVY2,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  featCellActive: {
+    borderColor: 'rgba(0,212,255,0.3)',
+  },
+  featCellInactive: {
+    borderColor: 'rgba(255,255,255,0.05)',
+    opacity: 0.3,
+  },
+  featIcon: {
+    fontSize: 20,
+  },
+  featIconOff: {
+    opacity: 0.5,
+  },
+  featLabel: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  featLabelOff: {
+    color: GRAY,
+    fontWeight: '500',
+  },
 
-  noRatingWrap: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 32 },
-  noRatingText: { fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+  /* Time Slot Grid */
+  dateLabel: {
+    color: GRAY,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  slotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  slot: {
+    width: '23%',
+    backgroundColor: NAVY2,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,212,255,0.2)',
+  },
+  slotBusy: {
+    backgroundColor: NAVY,
+    borderColor: 'rgba(255,255,255,0.05)',
+    opacity: 0.4,
+  },
+  slotSelected: {
+    backgroundColor: 'rgba(0,212,255,0.12)',
+    borderColor: CYAN,
+  },
+  slotText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  slotTextBusy: {
+    color: GRAY,
+  },
+  slotTextSelected: {
+    color: CYAN,
+  },
+  slotBusyLabel: {
+    color: GRAY,
+    fontSize: 9,
+    marginTop: 2,
+    fontWeight: '600',
+  },
 
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0', flexDirection: 'row', gap: 12 },
-  waBtn: { flex: 0.4, backgroundColor: '#25D366', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  waBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  reserveBtn: { flex: 0.6, backgroundColor: '#001F5B', paddingVertical: 14, borderRadius: 14, alignItems: 'center', shadowColor: '#001F5B', shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
-  reserveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  joinBtn: {
+    backgroundColor: CYAN,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 16,
+    shadowColor: CYAN,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  joinBtnText: {
+    color: NAVY,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  /* Address & Description */
+  addressText: {
+    color: GRAY,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  descText: {
+    color: GRAY,
+    fontSize: 13,
+    lineHeight: 20,
+  },
 });

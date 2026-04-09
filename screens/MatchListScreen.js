@@ -305,7 +305,10 @@ function MatchCard({ match, joining, isJoined, onPress, onJoin, onApply, onRate 
 
         {match.is_seeking_players && (match.needed_positions || []).length > 0 && (
           <View style={styles.seekingBanner}>
-            <Text style={styles.seekingText}>⚡ {(match.needed_positions || []).join(', ')} aranıyor</Text>
+            <Text style={styles.seekingText}>⚡ Oyuncu aranıyor: {(match.needed_positions || []).join(', ')}</Text>
+            <TouchableOpacity style={styles.seekingApplyBtn} onPress={onApply}>
+              <Text style={styles.seekingApplyBtnText}>Başvur</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -425,8 +428,10 @@ const styles = StyleSheet.create({
   fillBarFg:  { height: 4, borderRadius: 2 },
   fillLabel:  { fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 8 },
 
-  seekingBanner: { backgroundColor: 'rgba(255,184,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.25)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 8 },
-  seekingText:   { color: '#FFB800', fontSize: 11, fontWeight: '700' },
+  seekingBanner:       { backgroundColor: 'rgba(255,184,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,184,0,0.3)', borderRadius: 10, padding: 10, marginBottom: 8 },
+  seekingText:         { color: '#FFB800', fontSize: 12, fontWeight: '600' },
+  seekingApplyBtn:     { backgroundColor: '#FFB800', borderRadius: 10, padding: 10, marginTop: 8, alignItems: 'center' },
+  seekingApplyBtnText: { color: '#0A1628', fontWeight: '700', fontSize: 13 },
 
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   priceText:  { fontSize: 13, fontWeight: '700', color: '#FFB800' },

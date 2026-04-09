@@ -250,16 +250,16 @@ export default function CreateMatchScreen({ navigation, route }) {
               return (
                 <TouchableOpacity
                   key={v.id}
-                  style={[styles.venueCard, active && { borderColor: '#00A0D2', borderWidth: 2 }]}
+                  style={[styles.venueCard, active && { borderColor: '#00D4FF', borderWidth: 2 }]}
                   onPress={() => { setVenue(v); if (!price) setPrice(String(v.price_per_hour || '')); haptic(); }}
                   activeOpacity={0.85}
                 >
                   <View style={styles.venueRow}>
-                    <View style={[styles.venueAvatar, { backgroundColor: '#00A0D220' }]}>
+                    <View style={[styles.venueAvatar, { backgroundColor: 'rgba(0,212,255,0.12)' }]}>
                       <Text style={styles.venueAvatarIcon}>🏟️</Text>
                     </View>
                     <View style={styles.venueInfo}>
-                      <Text style={[styles.venueName, active && { color: '#00A0D2' }]}>{v.name}</Text>
+                      <Text style={[styles.venueName, active && { color: '#00D4FF' }]}>{v.name}</Text>
                       <Text style={styles.venueDistrict}>📍 {v.district || 'Bursa'}</Text>
                       <Text style={styles.venuePrice}>{v.price_per_hour || 300}₺/sa</Text>
                     </View>
@@ -356,8 +356,8 @@ export default function CreateMatchScreen({ navigation, route }) {
                 <Switch
                   value={isSeeking}
                   onValueChange={setIsSeeking}
-                  trackColor={{ false: '#E2E8F0', true: '#001F5B' }}
-                  thumbColor={isSeeking ? '#00A0D2' : '#fff'}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(0,212,255,0.3)' }}
+                  thumbColor={isSeeking ? '#00D4FF' : '#fff'}
                 />
               </View>
               {isSeeking && (
@@ -426,90 +426,90 @@ export default function CreateMatchScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
-  header: { backgroundColor: '#001F5B', paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
+  container: { flex: 1, backgroundColor: '#0A1628' },
+  header: { backgroundColor: '#0A1628', paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
+  backText: { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  stepCount: { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
-  progressBar: { height: 4, backgroundColor: '#E2E8F0' },
-  progressFill: { height: '100%', backgroundColor: '#00A0D2' },
+  stepCount: { color: 'rgba(255,255,255,0.35)', fontSize: 13 },
+  progressBar: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)' },
+  progressFill: { height: '100%', backgroundColor: '#00D4FF' },
   body: { flex: 1, paddingHorizontal: 20, paddingTop: 24 },
-  stepTitle: { fontSize: 22, fontWeight: '800', color: '#001F5B', marginBottom: 6 },
-  stepSub: { fontSize: 14, color: '#94A3B8', marginBottom: 24 },
+  stepTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 6 },
+  stepSub: { fontSize: 14, color: '#8B9BB4', marginBottom: 24 },
 
   // Format grid
   formatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  formatCard: { width: '47%', backgroundColor: '#fff', borderRadius: 18, padding: 16, gap: 8, borderWidth: 1.5, borderColor: '#E2E8F0', shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  formatCard: { width: '47%', backgroundColor: '#0F1E35', borderRadius: 18, padding: 16, gap: 8, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)' },
   formatIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   formatIcon: { fontSize: 24 },
-  formatLabel: { fontSize: 20, fontWeight: '900', color: '#001F5B' },
-  formatDesc: { fontSize: 11, color: '#94A3B8' },
+  formatLabel: { fontSize: 20, fontWeight: '900', color: '#FFFFFF' },
+  formatDesc: { fontSize: 11, color: '#8B9BB4' },
   formatPlayerBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
   formatPlayerText: { fontSize: 11, fontWeight: '700' },
 
   // Venue
-  venueCard: { backgroundColor: '#fff', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: '#E2E8F0', shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  venueCard: { backgroundColor: '#0F1E35', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)' },
   venueRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   venueAvatar: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   venueAvatarIcon: { fontSize: 20 },
   venueInfo: { flex: 1, gap: 2 },
-  venueName: { fontSize: 14, fontWeight: '700', color: '#001F5B' },
-  venueDistrict: { fontSize: 12, color: '#94A3B8' },
-  venuePrice: { fontSize: 12, color: '#C9A84C', fontWeight: '600' },
+  venueName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  venueDistrict: { fontSize: 12, color: '#8B9BB4' },
+  venuePrice: { fontSize: 12, color: '#FFB800', fontWeight: '600' },
   venueRight: { alignItems: 'flex-end', gap: 4 },
   venueRating: { fontSize: 12, fontWeight: '700' },
-  venueDetailLink: { fontSize: 11, color: '#00A0D2', fontWeight: '600' },
-  venueCheck: { fontSize: 18, color: '#00A0D2' },
+  venueDetailLink: { fontSize: 11, color: '#00D4FF', fontWeight: '600' },
+  venueCheck: { fontSize: 18, color: '#00D4FF' },
 
   // Date
   dateRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   inputGroup: { flex: 1 },
-  inputLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 8, marginTop: 4 },
-  input: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, fontSize: 14, color: '#001F5B', borderWidth: 1.5, borderColor: '#E2E8F0' },
-  priceHint: { fontSize: 12, color: '#64748B', marginBottom: 16 },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: '#8B9BB4', marginBottom: 8, marginTop: 4 },
+  input: { backgroundColor: '#0F1E35', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, fontSize: 14, color: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.2)' },
+  priceHint: { fontSize: 12, color: '#8B9BB4', marginBottom: 16 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  quickChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  quickChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  quickChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-  quickChipTextActive: { color: '#fff' },
+  quickChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  quickChipActive: { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  quickChipText: { fontSize: 12, fontWeight: '600', color: '#8B9BB4' },
+  quickChipTextActive: { color: '#00D4FF' },
 
-  slotHint: { fontSize: 12, color: '#94A3B8', marginBottom: 8 },
+  slotHint: { fontSize: 12, color: '#8B9BB4', marginBottom: 8 },
   slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  slotCell: { width: '22%', aspectRatio: 1.6, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-  slotCellActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  slotCellBusy: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
-  slotText: { fontSize: 13, fontWeight: '700', color: '#001F5B' },
-  slotTextActive: { color: '#fff' },
-  slotTextBusy: { color: '#CBD5E1', fontSize: 12 },
-  slotBusyTag: { fontSize: 9, color: '#94A3B8', marginTop: 1 },
+  slotCell: { width: '22%', aspectRatio: 1.6, backgroundColor: '#0F1E35', borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  slotCellActive: { backgroundColor: 'rgba(0,212,255,0.15)', borderColor: '#00D4FF' },
+  slotCellBusy: { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.06)' },
+  slotText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  slotTextActive: { color: '#00D4FF' },
+  slotTextBusy: { color: 'rgba(255,255,255,0.2)', fontSize: 12 },
+  slotBusyTag: { fontSize: 9, color: '#8B9BB4', marginTop: 1 },
 
   // Summary
-  summary: { backgroundColor: '#001F5B', borderRadius: 16, padding: 18, marginTop: 20, gap: 10 },
-  summaryTitle: { color: '#00A0D2', fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  summary: { backgroundColor: '#0F1E35', borderRadius: 16, padding: 18, marginTop: 20, gap: 10, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
+  summaryTitle: { color: '#00D4FF', fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   summaryIcon: { fontSize: 16, width: 24 },
   summaryText: { color: '#fff', fontSize: 14 },
 
   // Seeking
-  seekingCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#E2E8F0' },
+  seekingCard: { backgroundColor: '#0F1E35', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)' },
   seekingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  seekingTitle: { fontSize: 14, fontWeight: '700', color: '#001F5B' },
-  seekingSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
-  seekingPosLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 12, marginBottom: 8 },
+  seekingTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  seekingSub: { fontSize: 12, color: '#8B9BB4', marginTop: 2 },
+  seekingPosLabel: { fontSize: 12, fontWeight: '600', color: '#8B9BB4', marginTop: 12, marginBottom: 8 },
   posRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  posChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  posChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  posChipText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  posChipTextActive: { color: '#fff' },
+  posChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  posChipActive: { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  posChipText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  posChipTextActive: { color: '#00D4FF' },
 
   // Footer
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
-  nextBtn: { backgroundColor: '#00A0D2', paddingVertical: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#00A0D2', shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
-  nextBtnDisabled: { backgroundColor: '#94A3B8', shadowOpacity: 0 },
-  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A1628', padding: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,212,255,0.12)' },
+  nextBtn: { backgroundColor: '#00D4FF', paddingVertical: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#00D4FF', shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
+  nextBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.1)', shadowOpacity: 0 },
+  nextBtnText: { color: '#0A1628', fontSize: 16, fontWeight: '700' },
 
   // Done ekranı
-  doneContainer: { flex: 1, backgroundColor: '#001F5B', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  doneContainer: { flex: 1, backgroundColor: '#0A1628', alignItems: 'center', justifyContent: 'center', padding: 32 },
   doneIcon: { fontSize: 72, marginBottom: 16 },
   doneTitle: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 8 },
   doneSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, marginBottom: 28 },

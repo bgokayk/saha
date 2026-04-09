@@ -248,7 +248,7 @@ export default function LineupScreen({ navigation, route }) {
               autoFocus
             />
 
-            {searching && <ActivityIndicator color="#00A0D2" style={{ marginTop: 12 }} />}
+            {searching && <ActivityIndicator color="#00D4FF" style={{ marginTop: 12 }} />}
 
             {results.map(p => {
               const r = calcRating(p);
@@ -273,7 +273,7 @@ export default function LineupScreen({ navigation, route }) {
                       <Text style={styles.resultStat}>⚽ {p.goals ?? 0} gol</Text>
                       <Text style={styles.resultStat}>🅰️ {p.assists ?? 0} asist</Text>
                       <Text style={styles.resultStat}>🎮 {p.matches_played ?? 0} maç</Text>
-                      {p.position && <Text style={[styles.resultStat, { color: '#00A0D2' }]}>{p.position}</Text>}
+                      {p.position && <Text style={[styles.resultStat, { color: '#00D4FF' }]}>{p.position}</Text>}
                     </View>
                   </View>
 
@@ -311,13 +311,13 @@ const styles = StyleSheet.create({
   header:      { paddingTop: 10, paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#040E1E' },
   headerCenter:{ alignItems: 'center' },
   headerTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  headerSub:   { color: '#00A0D2', fontSize: 11, marginTop: 1 },
+  headerSub:   { color: '#00D4FF', fontSize: 11, marginTop: 1 },
   backText:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   clearText:   { color: '#EF4444', fontSize: 13 },
 
   formatBar:   { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8, gap: 8, backgroundColor: '#040E1E' },
   fmtBtn:      { flex: 1, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  fmtBtnActive:{ backgroundColor: '#00A0D2', borderColor: '#00A0D2' },
+  fmtBtnActive:{ backgroundColor: '#00D4FF', borderColor: '#00D4FF' },
   fmtText:     { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600' },
   fmtTextActive:{ color: '#FFFFFF' },
 
@@ -348,14 +348,14 @@ const styles = StyleSheet.create({
 
   footer:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 28, paddingTop: 4 },
   footerHint:  { color: 'rgba(255,255,255,0.3)', fontSize: 10, flex: 1 },
-  shareBtn:    { backgroundColor: '#00A0D2', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18 },
+  shareBtn:    { backgroundColor: '#00D4FF', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18 },
   shareBtnText:{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
 
   // Modal
   modalOverlay:{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
   modalBox:    { backgroundColor: '#0B1A30', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  modalTitle:  { color: '#00A0D2', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+  modalTitle:  { color: '#00D4FF', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
   modalClose:  { color: 'rgba(255,255,255,0.4)', fontSize: 18 },
 
   searchInput: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 12 },
@@ -374,5 +374,5 @@ const styles = StyleSheet.create({
 
   noResult:    { color: 'rgba(255,255,255,0.3)', fontSize: 13, textAlign: 'center', marginTop: 20, marginBottom: 10 },
   manualBtn:   { marginTop: 12, backgroundColor: 'rgba(0,160,210,0.15)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,160,210,0.3)' },
-  manualBtnText:{ color: '#00A0D2', fontSize: 14 },
+  manualBtnText:{ color: '#00D4FF', fontSize: 14 },
 });

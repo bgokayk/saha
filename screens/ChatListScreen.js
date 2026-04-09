@@ -145,7 +145,7 @@ function MatchChatList({ navigation, myId }) {
         matches.map((m) => (
           <TouchableOpacity key={m.id} style={styles.convoRow}
             onPress={() => navigation.navigate('Chat', { matchId: m.id, otherName: `${m.venues?.name || 'Saha'} Maçı`, isMatch: true })}>
-            <View style={[styles.convoAvatar, { backgroundColor: '#001F5B' }]}>
+            <View style={[styles.convoAvatar, { backgroundColor: 'rgba(0,212,255,0.1)' }]}>
               <Text style={styles.convoAvatarText}>⚽</Text>
             </View>
             <View style={styles.convoInfo}>

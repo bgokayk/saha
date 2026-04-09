@@ -1,29 +1,61 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Share, Linking, Platform
+  Alert, Share, Linking, Platform, Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { avatarColor, initials, calcRating, ratingColor } from '../lib/utils';
+import { avatarColor, initials, calcRating, ratingColor, formatMatchDate } from '../lib/utils';
+
+// ── Theme ──────────────────────────────────────────────────────
+const C = {
+  navy:    '#0A1628',
+  navy2:   '#0F1E35',
+  cyan:    '#00D4FF',
+  gold:    '#FFB800',
+  gray:    '#8B9BB4',
+  success: '#00E096',
+  danger:  '#FF4757',
+  white:   '#FFFFFF',
+};
+
+function haptic(type = 'light') {
+  if (Platform.OS === 'web') return;
+  try {
+    const H = require('expo-haptics');
+    if (type === 'selection') H.selectionAsync();
+    else if (type === 'success') H.notificationAsync(H.NotificationFeedbackType.Success);
+    else H.impactAsync(H.ImpactFeedbackStyle.Light);
+  } catch (_) {}
+}
 
 export default function MatchRatingScreen({ navigation, route }) {
   const { matchId, venueId, venueName, matchDate, format } = route.params || {};
+  const insets = useSafeAreaInsets();
 
   const isSubmitting = useRef(false);
   const [step, setStep] = useState('own'); // 'own' | 'rate' | 'share'
   const [myGoals, setMyGoals] = useState(0);
   const [myAssists, setMyAssists] = useState(0);
   const [players, setPlayers] = useState([]);
-  const [ratings, setRatings] = useState({});
   const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
   const [myId, setMyId] = useState(null);
   const [myProfile, setMyProfile] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Animation for step transitions
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => { loadData(); }, []);
+
   useEffect(() => {
-    loadData();
-  }, []);
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [step, currentPlayerIdx]);
 
   async function loadData() {
     if (!matchId) return;
@@ -31,7 +63,12 @@ export default function MatchRatingScreen({ navigation, route }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setMyId(user.id);
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
       setMyProfile(prof);
 
       const { data: mp } = await supabase
@@ -45,13 +82,14 @@ export default function MatchRatingScreen({ navigation, route }) {
     }
   }
 
+  // ── Step 1: Save own stats ────────────────────────────────────
   async function saveAndContinue() {
     if (!myId) return;
     if (isSubmitting.current) return;
     isSubmitting.current = true;
     setSaving(true);
     try {
-      // Çift sayılmayı önle: bu maç için daha önce kendi statsını kaydettiyse atla
+      // Prevent double counting: check if self-stat marker already exists
       const { data: existing } = await supabase
         .from('match_ratings')
         .select('id')
@@ -60,10 +98,14 @@ export default function MatchRatingScreen({ navigation, route }) {
         .eq('to_user', myId)
         .maybeSingle();
 
-      const { data: prof } = await supabase.from('profiles').select('goals, assists, matches_played').eq('id', myId).single();
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('goals, assists, matches_played')
+        .eq('id', myId)
+        .single();
 
       if (!existing) {
-        // Kendi istatistiklerini işaretle (from_user = to_user = kendisi)
+        // Mark own stats recorded (from_user = to_user = self)
         await supabase.from('match_ratings').upsert({
           match_id: matchId, from_user: myId, to_user: myId, rating: 0,
         }, { onConflict: 'match_id,from_user,to_user' });
@@ -75,13 +117,15 @@ export default function MatchRatingScreen({ navigation, route }) {
         }).eq('id', myId);
       }
 
-      // Profili güncelle ki share ekranında güncel rating gösterilsin
+      // Update local profile for share screen
       setMyProfile(prev => prev ? {
         ...prev,
         goals: (prev.goals || 0) + myGoals,
         assists: (prev.assists || 0) + myAssists,
         matches_played: (prev.matches_played || 0) + 1,
       } : prev);
+
+      haptic('success');
 
       if (players.length > 0) {
         setStep('rate');
@@ -96,7 +140,9 @@ export default function MatchRatingScreen({ navigation, route }) {
     }
   }
 
+  // ── Step 2: Submit rating for a player ────────────────────────
   async function submitRating(toUserId, rating) {
+    haptic('selection');
     try {
       await supabase.from('match_ratings').upsert({
         match_id: matchId,
@@ -105,12 +151,12 @@ export default function MatchRatingScreen({ navigation, route }) {
         rating,
       }, { onConflict: 'match_id,from_user,to_user' });
 
-      // Oyuncunun ortalama rating'ini güncelle
+      // Recalculate average rating for this player
       const { data: allRatings } = await supabase
         .from('match_ratings')
         .select('rating')
         .eq('to_user', toUserId)
-        .neq('from_user', toUserId); // self-rating hariç
+        .neq('from_user', toUserId); // exclude self-marker
       if (allRatings && allRatings.length > 0) {
         const validRatings = allRatings.filter(r => r.rating > 0);
         if (validRatings.length > 0) {
@@ -119,7 +165,7 @@ export default function MatchRatingScreen({ navigation, route }) {
         }
       }
     } catch (e) {
-      console.error(e);
+      // Silent fail — don't block flow
     }
 
     const next = currentPlayerIdx + 1;
@@ -130,29 +176,34 @@ export default function MatchRatingScreen({ navigation, route }) {
     }
   }
 
+  // ── Step 3: Share ─────────────────────────────────────────────
   async function sharePerformance() {
-    const rating = calcRating(myProfile);
-    const msg = `⚽ SAHA ile oynadım!\n\n🏟️ ${venueName || 'Halı Saha'}\n📅 ${matchDate || 'Bugün'} · ${format || '7v7'}\n\n⚽ ${myGoals} Gol | 🅰️ ${myAssists} Asist\n⭐ Rating: ${rating?.toFixed(1) || '5.0'}\n\nSAHA uygulamasını indir: https://saha.app`;
+    const r = calcRating(myProfile);
+    const msg = `\u26BD SAHA ile oynad\u0131m!\n\n\uD83C\uDFDF\uFE0F ${venueName || 'Hal\u0131 Saha'}\n\uD83D\uDCC5 ${matchDate || 'Bug\u00FCn'} \u00B7 ${format || '7v7'}\n\n\u26BD ${myGoals} Gol | \uD83C\uDD70\uFE0F ${myAssists} Asist\n\u2B50 Rating: ${r?.toFixed(1) || '5.0'}\n\nSAHA uygulamasını indir: https://saha.app`;
     if (Platform.OS === 'web') {
       Alert.alert('Performansın', msg);
       return;
     }
     try {
       await Share.share({ message: msg });
-    } catch (e) {}
+    } catch (_) {}
   }
 
   async function shareWhatsApp() {
-    const msg = encodeURIComponent(`Maça davetlisin! 🏟️ ${venueName} · ${matchDate}\nhttps://saha.app/mac/${matchId}`);
+    const msg = encodeURIComponent(`Maça davetlisin! \uD83C\uDFDF\uFE0F ${venueName} \u00B7 ${matchDate}\nhttps://saha.app/mac/${matchId}`);
     if (Platform.OS === 'web') {
-      window.open(`https://wa.me/?text=${msg}`, '_blank');
+      try { window.open(`https://wa.me/?text=${msg}`, '_blank'); } catch (_) {}
       return;
     }
     const url = `whatsapp://send?text=${msg}`;
-    const canOpen = await Linking.canOpenURL(url).catch(() => false);
-    if (canOpen) {
-      Linking.openURL(url);
-    } else {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        Linking.openURL(url);
+      } else {
+        sharePerformance();
+      }
+    } catch (_) {
       sharePerformance();
     }
   }
@@ -160,87 +211,108 @@ export default function MatchRatingScreen({ navigation, route }) {
   const rating = calcRating(myProfile);
   const rColor = ratingColor(rating);
 
-  // Guard: matchId yoksa hata ekranı
+  // ── Guard: no matchId ─────────────────────────────────────────
   if (!matchId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.headerBack}>← Geri</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Hata</Text>
           <View style={{ width: 50 }} />
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Text style={{ color: '#64748B', fontSize: 15, textAlign: 'center' }}>Maç bilgisi bulunamadı.</Text>
+          <Text style={{ color: C.gray, fontSize: 15, textAlign: 'center' }}>Maç bilgisi bulunamadı.</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  // ── ADIM 1: Kendi performansını gir ──────────────────────────
+  // ════════════════════════════════════════════════════════════════
+  // STEP 1 — Own Performance
+  // ════════════════════════════════════════════════════════════════
   if (step === 'own') {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.headerBack}>← Geri</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Maç Sonu 🏁</Text>
+          <Text style={styles.headerTitle}>Maç Sona Erdi 🏁</Text>
           <View style={{ width: 50 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.stepTitle}>Performansını gir</Text>
+        <Animated.ScrollView
+          contentContainerStyle={styles.scroll}
+          style={{ opacity: fadeAnim }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.stepTitle}>Maç Sona Erdi 🏁</Text>
           <Text style={styles.stepSub}>Bu maçta kaç gol attın, kaç asist yaptın?</Text>
 
+          {/* Goal Counter */}
           <View style={styles.counterCard}>
             <Text style={styles.counterLabel}>⚽ Gol</Text>
             <View style={styles.counterRow}>
-              <TouchableOpacity style={styles.counterBtn} onPress={() => setMyGoals(Math.max(0, myGoals - 1))}>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => { setMyGoals(Math.max(0, myGoals - 1)); haptic(); }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.counterBtnText}>−</Text>
               </TouchableOpacity>
               <Text style={styles.counterNum}>{myGoals}</Text>
-              <TouchableOpacity style={styles.counterBtn} onPress={() => setMyGoals(myGoals + 1)}>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => { setMyGoals(myGoals + 1); haptic(); }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.counterBtnText}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Assist Counter */}
           <View style={styles.counterCard}>
             <Text style={styles.counterLabel}>🅰️ Asist</Text>
             <View style={styles.counterRow}>
-              <TouchableOpacity style={styles.counterBtn} onPress={() => setMyAssists(Math.max(0, myAssists - 1))}>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => { setMyAssists(Math.max(0, myAssists - 1)); haptic(); }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.counterBtnText}>−</Text>
               </TouchableOpacity>
               <Text style={styles.counterNum}>{myAssists}</Text>
-              <TouchableOpacity style={styles.counterBtn} onPress={() => setMyAssists(myAssists + 1)}>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => { setMyAssists(myAssists + 1); haptic(); }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.counterBtnText}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <TouchableOpacity
-            style={[styles.primaryBtn, saving && { opacity: 0.6 }]}
+            style={[styles.cyanBtn, saving && { opacity: 0.6 }]}
             onPress={saveAndContinue}
             disabled={saving}
+            activeOpacity={0.85}
           >
-            <Text style={styles.primaryBtnText}>
-              {saving ? 'Kaydediliyor...' : players.length > 0 ? 'Takım Arkadaşlarını Değerlendir →' : 'Paylaş →'}
+            <Text style={styles.cyanBtnText}>
+              {saving ? 'Kaydediliyor...' : 'Devam →'}
             </Text>
           </TouchableOpacity>
-
-          {players.length === 0 && (
-            <TouchableOpacity onPress={() => setStep('share')}>
-              <Text style={styles.skipText}>Atla, paylaşım ekranına git →</Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+        </Animated.ScrollView>
+      </View>
     );
   }
 
-  // ── ADIM 2: Takım arkadaşlarını değerlendir ──────────────────
+  // ════════════════════════════════════════════════════════════════
+  // STEP 2 — Rate Teammates
+  // ════════════════════════════════════════════════════════════════
   if (step === 'rate') {
     const player = players[currentPlayerIdx];
     if (!player) { setStep('share'); return null; }
@@ -248,14 +320,15 @@ export default function MatchRatingScreen({ navigation, route }) {
     const pColor = ratingColor(pr);
 
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <View style={{ width: 50 }} />
           <Text style={styles.headerTitle}>Değerlendir</Text>
           <Text style={styles.headerSub}>{currentPlayerIdx + 1}/{players.length}</Text>
         </View>
 
-        <View style={styles.rateScreen}>
+        <Animated.View style={[styles.rateScreen, { opacity: fadeAnim }]}>
+          {/* Player Card */}
           <View style={[styles.playerBigCard, { backgroundColor: avatarColor(player.full_name) }]}>
             <Text style={styles.playerBigInitials}>{initials(player.full_name)}</Text>
             <View style={[styles.playerRatingBadge, { backgroundColor: pColor }]}>
@@ -268,18 +341,42 @@ export default function MatchRatingScreen({ navigation, route }) {
 
           <Text style={styles.rateQuestion}>Bu maçtaki performansını değerlendir:</Text>
 
-          <View style={styles.ratingButtons}>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
-              <TouchableOpacity
-                key={r}
-                style={[styles.ratingBtn, {
-                  backgroundColor: r >= 8 ? '#C9A84C' : r >= 6 ? '#10B981' : r >= 4 ? '#3B82F6' : '#EF4444',
-                }]}
-                onPress={() => submitRating(player.id, r)}
-              >
-                <Text style={styles.ratingBtnText}>{r}</Text>
-              </TouchableOpacity>
-            ))}
+          {/* Rating Buttons: 2 rows of 5 */}
+          <View style={styles.ratingGrid}>
+            <View style={styles.ratingRow}>
+              {[1, 2, 3, 4, 5].map(r => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.ratingBtn, {
+                    backgroundColor: r <= 3
+                      ? 'rgba(255,71,87,0.8)'
+                      : r <= 5
+                        ? 'rgba(255,184,0,0.8)'
+                        : 'rgba(0,224,150,0.8)',
+                  }]}
+                  onPress={() => submitRating(player.id, r)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.ratingBtnText}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.ratingRow}>
+              {[6, 7, 8, 9, 10].map(r => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.ratingBtn, {
+                    backgroundColor: r <= 6
+                      ? 'rgba(255,184,0,0.8)'
+                      : 'rgba(0,224,150,0.8)',
+                  }]}
+                  onPress={() => submitRating(player.id, r)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.ratingBtnText}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <TouchableOpacity onPress={() => {
@@ -289,205 +386,369 @@ export default function MatchRatingScreen({ navigation, route }) {
           }}>
             <Text style={styles.skipText}>Bu oyuncuyu atla →</Text>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </Animated.View>
+      </View>
     );
   }
 
-  // ── ADIM 3: Paylaşım ──────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════
+  // STEP 3 — Share
+  // ════════════════════════════════════════════════════════════════
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View style={{ width: 50 }} />
         <Text style={styles.headerTitle}>Harika Maç! 🎉</Text>
         <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Performans kartı */}
+      <Animated.ScrollView
+        contentContainerStyle={styles.scroll}
+        style={{ opacity: fadeAnim }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Performance Card */}
         <View style={[styles.perfCard, { borderColor: rColor }]}>
           <View style={[styles.perfAvatar, { backgroundColor: avatarColor(myProfile?.full_name || '') }]}>
             <Text style={styles.perfInitials}>{initials(myProfile?.full_name || '')}</Text>
           </View>
           <Text style={styles.perfName}>{myProfile?.full_name || 'Oyuncu'}</Text>
-          <Text style={styles.perfVenue}>{venueName || 'Halı Saha'} · {format || '7v7'}</Text>
 
-          <View style={styles.perfStats}>
-            <View style={styles.perfStat}>
-              <Text style={styles.perfStatNum}>{myGoals}</Text>
-              <Text style={styles.perfStatLabel}>Gol ⚽</Text>
-            </View>
-            <View style={styles.perfDivider} />
-            <View style={styles.perfStat}>
-              <Text style={styles.perfStatNum}>{myAssists}</Text>
-              <Text style={styles.perfStatLabel}>Asist 🅰️</Text>
-            </View>
-            <View style={styles.perfDivider} />
-            <View style={styles.perfStat}>
-              <Text style={[styles.perfStatNum, { color: rColor }]}>
-                {rating?.toFixed(1)}
-              </Text>
-              <Text style={styles.perfStatLabel}>Rating ⭐</Text>
-            </View>
+          {/* Rating circle */}
+          <View style={[styles.ratingCircle, { backgroundColor: rColor }]}>
+            <Text style={styles.ratingCircleNum}>{rating?.toFixed(1)}</Text>
           </View>
+
+          <Text style={styles.perfStatsLine}>
+            ⚽ {myGoals} Gol  |  🅰️ {myAssists} Asist
+          </Text>
+
+          <Text style={styles.perfVenue}>
+            {venueName || 'Halı Saha'} · {matchDate || 'Bugün'}
+          </Text>
+
+          <Text style={styles.perfBrand}>SAHA by LumenCo.</Text>
         </View>
 
-        {/* Paylaş butonları */}
-        <Text style={styles.shareTitle}>Paylaş</Text>
-
-        <TouchableOpacity style={styles.shareBtn} onPress={sharePerformance}>
-          <Text style={styles.shareBtnIcon}>📤</Text>
-          <Text style={styles.shareBtnText}>Performansımı Paylaş</Text>
+        {/* Share Buttons */}
+        <TouchableOpacity style={styles.shareBtnCyan} onPress={sharePerformance} activeOpacity={0.85}>
+          <Text style={styles.shareBtnCyanText}>📱 Performansı Paylaş</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.shareBtn, styles.shareBtnWa]} onPress={shareWhatsApp}>
-          <Text style={styles.shareBtnIcon}>💬</Text>
-          <Text style={[styles.shareBtnText, { color: '#fff' }]}>WhatsApp'ta Paylaş</Text>
+        <TouchableOpacity style={styles.shareBtnWa} onPress={shareWhatsApp} activeOpacity={0.85}>
+          <Text style={styles.shareBtnWaText}>💬 WhatsApp'a Gönder</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.primaryBtn, { marginTop: 24 }]}
+          style={styles.homeBtn}
           onPress={() => navigation.navigate('Home')}
+          activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Ana Sayfaya Dön</Text>
+          <Text style={styles.homeBtnText}>Ana Sayfaya Dön</Text>
         </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      </Animated.ScrollView>
+    </View>
   );
 }
 
+// ════════════════════════════════════════════════════════════════
+// Styles
+// ════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: {
+    flex: 1,
+    backgroundColor: C.navy,
+  },
 
+  // ── Header ──────────────────────────────────────────────────
   header: {
-    backgroundColor: '#001F5B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  headerBack:  { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  headerSub:   { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+  headerBack:  { color: C.gray, fontSize: 14 },
+  headerTitle: { color: C.white, fontSize: 17, fontWeight: '700' },
+  headerSub:   { color: C.gray, fontSize: 13, width: 50, textAlign: 'right' },
 
-  scroll: { padding: 20, paddingBottom: 40 },
+  scroll: { padding: 20, paddingBottom: 48 },
 
-  stepTitle: { fontSize: 22, fontWeight: '800', color: '#001F5B', marginBottom: 6 },
-  stepSub:   { fontSize: 14, color: '#94A3B8', marginBottom: 24 },
+  // ── Step 1: Own Performance ─────────────────────────────────
+  stepTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: C.white,
+    marginBottom: 6,
+  },
+  stepSub: {
+    fontSize: 14,
+    color: C.gray,
+    marginBottom: 28,
+  },
 
   counterCard: {
-    backgroundColor: '#fff',
+    backgroundColor: C.navy2,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 12,
-    shadowColor: '#001F5B',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: 14,
   },
-  counterLabel: { fontSize: 15, fontWeight: '700', color: '#64748B', marginBottom: 12 },
-  counterRow:   { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  counterBtn: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center', alignItems: 'center',
+  counterLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.gray,
+    marginBottom: 14,
   },
-  counterBtnText: { fontSize: 24, fontWeight: '700', color: '#001F5B' },
-  counterNum:     { fontSize: 36, fontWeight: '900', color: '#001F5B', minWidth: 48, textAlign: 'center' },
-
-  primaryBtn: {
-    backgroundColor: '#001F5B',
-    borderRadius: 14,
-    paddingVertical: 16,
+  counterRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#001F5B',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'center',
+    gap: 24,
   },
-  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  counterBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.navy2,
+    borderWidth: 2,
+    borderColor: C.cyan,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterBtnText: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: C.cyan,
+  },
+  counterNum: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: C.white,
+    minWidth: 64,
+    textAlign: 'center',
+  },
 
-  skipText: { textAlign: 'center', color: '#94A3B8', fontSize: 13, marginTop: 16 },
+  cyanBtn: {
+    backgroundColor: C.cyan,
+    borderRadius: 14,
+    paddingVertical: 17,
+    alignItems: 'center',
+    marginTop: 16,
+    shadowColor: C.cyan,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  cyanBtnText: {
+    color: C.navy,
+    fontSize: 16,
+    fontWeight: '800',
+  },
 
-  // Rate step
-  rateScreen: { flex: 1, alignItems: 'center', padding: 24 },
+  skipText: {
+    textAlign: 'center',
+    color: C.gray,
+    fontSize: 13,
+    marginTop: 20,
+  },
+
+  // ── Step 2: Rate Teammates ──────────────────────────────────
+  rateScreen: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 8,
+  },
 
   playerBigCard: {
-    width: 100, height: 100, borderRadius: 30,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12, marginTop: 8,
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 6,
-  },
-  playerBigInitials:    { fontSize: 36, fontWeight: '800', color: '#fff' },
-  playerRatingBadge: {
-    position: 'absolute', bottom: -8, right: -8,
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 10, borderWidth: 2, borderColor: '#fff',
-  },
-  playerRatingBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-
-  playerBigName: { fontSize: 20, fontWeight: '800', color: '#001F5B', marginBottom: 4 },
-  playerBigPos:  { fontSize: 13, color: '#94A3B8', marginBottom: 24 },
-
-  rateQuestion: { fontSize: 14, fontWeight: '600', color: '#64748B', marginBottom: 16, textAlign: 'center' },
-
-  ratingButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    width: '100%',
+    height: 200,
+    borderRadius: 24,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  playerBigInitials: {
+    fontSize: 56,
+    fontWeight: '800',
+    color: C.white,
+  },
+  playerRatingBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  playerRatingBadgeText: {
+    color: C.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  playerBigName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: C.white,
+    marginBottom: 4,
+  },
+  playerBigPos: {
+    fontSize: 13,
+    color: C.gray,
+    marginBottom: 24,
+  },
+
+  rateQuestion: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.gray,
+    marginBottom: 18,
+    textAlign: 'center',
+  },
+
+  ratingGrid: {
+    width: '100%',
     gap: 10,
     marginBottom: 16,
   },
-  ratingBtn: {
-    width: 52, height: 52, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
   },
-  ratingBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  ratingBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  ratingBtnText: {
+    color: C.white,
+    fontSize: 18,
+    fontWeight: '800',
+  },
 
-  // Share step
+  // ── Step 3: Share ───────────────────────────────────────────
   perfCard: {
-    backgroundColor: '#001F5B',
-    borderRadius: 24,
-    padding: 24,
+    backgroundColor: C.navy2,
+    borderRadius: 20,
+    padding: 28,
     alignItems: 'center',
     marginBottom: 24,
-    borderWidth: 3,
+    borderWidth: 2,
   },
   perfAvatar: {
-    width: 80, height: 80, borderRadius: 24,
-    justifyContent: 'center', alignItems: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  perfInitials: { fontSize: 28, fontWeight: '800', color: '#fff' },
-  perfName:     { fontSize: 18, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  perfVenue:    { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 20 },
+  perfInitials: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: C.white,
+  },
+  perfName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.white,
+    marginBottom: 12,
+  },
 
-  perfStats: { flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-around' },
-  perfStat:  { alignItems: 'center' },
-  perfStatNum:   { fontSize: 28, fontWeight: '900', color: '#00A0D2' },
-  perfStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 4 },
-  perfDivider:   { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.15)' },
+  ratingCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  ratingCircleNum: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: C.white,
+  },
 
-  shareTitle: { fontSize: 16, fontWeight: '700', color: '#001F5B', marginBottom: 12 },
+  perfStatsLine: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.white,
+    marginBottom: 12,
+  },
+  perfVenue: {
+    fontSize: 12,
+    color: C.gray,
+    marginBottom: 12,
+  },
+  perfBrand: {
+    fontSize: 11,
+    color: C.cyan,
+    fontWeight: '600',
+  },
 
-  shareBtn: {
-    backgroundColor: '#fff',
+  shareBtnCyan: {
+    backgroundColor: C.cyan,
     borderRadius: 14,
     paddingVertical: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     marginBottom: 10,
-    shadowColor: '#001F5B',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: C.cyan,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  shareBtnWa:   { backgroundColor: '#25D366' },
-  shareBtnIcon: { fontSize: 20 },
-  shareBtnText: { fontSize: 15, fontWeight: '700', color: '#001F5B' },
+  shareBtnCyanText: {
+    color: C.navy,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  shareBtnWa: {
+    backgroundColor: '#25D366',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#25D366',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  shareBtnWaText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  homeBtn: {
+    backgroundColor: C.navy2,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  homeBtnText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

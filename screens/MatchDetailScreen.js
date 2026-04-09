@@ -120,7 +120,7 @@ export default function MatchDetailScreen({ navigation, route }) {
   if (loading) {
     return (
       <View style={[styles.loadWrap, { paddingTop: insets.top }]}>
-        <ActivityIndicator color="#00A0D2" size="large" />
+        <ActivityIndicator color="#00D4FF" size="large" />
       </View>
     );
   }
@@ -301,65 +301,65 @@ export default function MatchDetailScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
-  loadWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
+  loadWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A1628' },
 
-  header: { backgroundColor: '#001F5B', paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText:     { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
+  header: { backgroundColor: '#0A1628', paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
+  backText:     { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   fmtBadge:     { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
   fmtBadgeText: { fontSize: 13, fontWeight: '800' },
   chatIconBtn:  { fontSize: 22 },
 
-  hero: { backgroundColor: '#fff', padding: 20, borderBottomWidth: 3, marginBottom: 12, gap: 6 },
-  heroVenue:    { fontSize: 22, fontWeight: '900', color: '#001F5B' },
-  heroLocation: { fontSize: 13, color: '#94A3B8' },
-  heroDate:     { fontSize: 14, color: '#64748B', fontWeight: '600' },
+  hero: { backgroundColor: '#0F1E35', padding: 20, borderBottomWidth: 3, marginBottom: 12, gap: 6 },
+  heroVenue:    { fontSize: 22, fontWeight: '900', color: '#FFFFFF' },
+  heroLocation: { fontSize: 13, color: '#8B9BB4' },
+  heroDate:     { fontSize: 14, color: '#8B9BB4', fontWeight: '600' },
   heroStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   statusBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusOpen:   { backgroundColor: '#D1FAE5' },
-  statusDone:   { backgroundColor: '#E0E7FF' },
-  statusFull:   { backgroundColor: '#FEE2E2' },
-  statusText:   { fontSize: 12, fontWeight: '700', color: '#001F5B' },
-  heroPrice:    { fontSize: 13, fontWeight: '700', color: '#C9A84C' },
+  statusOpen:   { backgroundColor: 'rgba(0,224,150,0.12)' },
+  statusDone:   { backgroundColor: 'rgba(0,212,255,0.12)' },
+  statusFull:   { backgroundColor: 'rgba(255,71,87,0.12)' },
+  statusText:   { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  heroPrice:    { fontSize: 13, fontWeight: '700', color: '#FFB800' },
   fillBar:      { marginTop: 10, gap: 4 },
-  fillBarBg:    { height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
+  fillBarBg:    { height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' },
   fillBarFg:    { height: '100%', borderRadius: 4 },
-  fillText:     { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
+  fillText:     { fontSize: 11, color: '#8B9BB4', fontWeight: '600' },
 
-  organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 12, marginBottom: 8 },
+  organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#0F1E35', paddingHorizontal: 20, paddingVertical: 12, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
   orgAvatar:    { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   orgAvatarText:{ color: '#fff', fontSize: 14, fontWeight: '800' },
-  orgLabel:     { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
-  orgName:      { fontSize: 14, fontWeight: '700', color: '#001F5B' },
+  orgLabel:     { fontSize: 10, color: '#8B9BB4', fontWeight: '600' },
+  orgName:      { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 
   section:      { paddingHorizontal: 16, marginBottom: 12 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#001F5B', marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginBottom: 12 },
 
   playerGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  playerSlot:  { width: '22%', backgroundColor: '#fff', borderRadius: 14, padding: 10, alignItems: 'center', gap: 4, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-  playerSlotEmpty: { backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0', borderStyle: 'dashed' },
+  playerSlot:  { width: '22%', backgroundColor: '#0F1E35', borderRadius: 14, padding: 10, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  playerSlotEmpty: { backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)', borderStyle: 'dashed' },
   playerAvatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   playerAvatarText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  playerAvatarEmpty: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
-  playerAvatarEmptyIcon: { fontSize: 20, color: '#94A3B8' },
-  playerName:   { fontSize: 10, fontWeight: '700', color: '#001F5B', textAlign: 'center' },
-  playerPos:    { fontSize: 9, color: '#94A3B8', fontWeight: '600' },
+  playerAvatarEmpty: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' },
+  playerAvatarEmptyIcon: { fontSize: 20, color: '#8B9BB4' },
+  playerName:   { fontSize: 10, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+  playerPos:    { fontSize: 9, color: '#8B9BB4', fontWeight: '600' },
   playerRating: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   playerRatingText: { fontSize: 10, fontWeight: '800' },
-  playerEmptyText: { fontSize: 10, color: '#CBD5E1', fontWeight: '600' },
+  playerEmptyText: { fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
 
-  venueCard:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 14, padding: 14, marginBottom: 12, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  venueCard:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0F1E35', marginHorizontal: 16, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
   venueCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   venueCardIcon: { fontSize: 24 },
-  venueCardName: { fontSize: 14, fontWeight: '700', color: '#001F5B' },
-  venueCardSub:  { fontSize: 11, color: '#00A0D2', marginTop: 2 },
-  venueCardPrice:{ fontSize: 13, fontWeight: '700', color: '#C9A84C' },
+  venueCardName: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  venueCardSub:  { fontSize: 11, color: '#00D4FF', marginTop: 2 },
+  venueCardPrice:{ fontSize: 13, fontWeight: '700', color: '#FFB800' },
 
-  footer:    { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0', flexDirection: 'row', gap: 10 },
-  chatBtn:   { width: 50, height: 50, borderRadius: 14, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  footer:    { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A1628', padding: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,212,255,0.12)', flexDirection: 'row', gap: 10 },
+  chatBtn:   { width: 50, height: 50, borderRadius: 14, backgroundColor: 'rgba(0,212,255,0.08)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
   chatBtnText: { fontSize: 22 },
-  mainBtn:   { flex: 1, paddingVertical: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#001F5B', shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  mainBtn:   { flex: 1, paddingVertical: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center', elevation: 4 },
   mainBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  endBtn:    { width: 50, height: 50, borderRadius: 14, backgroundColor: '#D1FAE5', justifyContent: 'center', alignItems: 'center' },
+  endBtn:    { width: 50, height: 50, borderRadius: 14, backgroundColor: 'rgba(0,224,150,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,224,150,0.3)' },
   endBtnText:{ fontSize: 22 },
 });

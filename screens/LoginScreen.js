@@ -140,7 +140,7 @@ export default function LoginScreen({ navigation, route }) {
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#001F5B" size="small" />
+              ? <ActivityIndicator color="#0A1628" size="small" />
               : <Text style={styles.btnPrimaryText}>Giriş Yap</Text>
             }
           </TouchableOpacity>
@@ -177,13 +177,13 @@ export default function LoginScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#001F5B' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
   scroll: { paddingHorizontal: 28, paddingTop: 20, paddingBottom: 40 },
   back: { marginBottom: 28 },
   backText: { color: 'rgba(255,255,255,0.4)', fontSize: 15 },
 
   header: { alignItems: 'center', marginBottom: 36 },
-  logoMini: { width: 56, height: 56, backgroundColor: 'rgba(0,160,210,0.15)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,160,210,0.3)' },
+  logoMini: { width: 56, height: 56, backgroundColor: 'rgba(0,212,255,0.12)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.3)' },
   logoMiniText: { fontSize: 28 },
   title: { color: '#FFFFFF', fontSize: 26, fontWeight: '700', marginBottom: 6 },
   subtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 15 },
@@ -205,11 +205,11 @@ const styles = StyleSheet.create({
   eyeBtn: { paddingHorizontal: 14, paddingVertical: 14 },
   eyeText: { fontSize: 16 },
   forgotWrap: { alignItems: 'flex-end', marginTop: 10 },
-  forgotText: { color: '#00A0D2', fontSize: 13 },
+  forgotText: { color: '#00D4FF', fontSize: 13 },
 
-  btnPrimary: { backgroundColor: '#00A0D2', paddingVertical: 17, borderRadius: 14, alignItems: 'center', marginBottom: 20, shadowColor: '#00A0D2', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  btnPrimary: { backgroundColor: '#00D4FF', paddingVertical: 17, borderRadius: 14, alignItems: 'center', marginBottom: 20, shadowColor: '#00D4FF', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   btnDisabled: { opacity: 0.6 },
-  btnPrimaryText: { color: '#001F5B', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  btnPrimaryText: { color: '#0A1628', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
@@ -217,10 +217,10 @@ const styles = StyleSheet.create({
 
   btnSocial: { backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 15, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginBottom: 8, flexDirection: 'row', justifyContent: 'center', gap: 8 },
   btnSocialText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
-  comingSoon: { backgroundColor: 'rgba(0,160,210,0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  comingSoonText: { color: '#00A0D2', fontSize: 10, fontWeight: '700' },
+  comingSoon: { backgroundColor: 'rgba(0,212,255,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  comingSoonText: { color: '#00D4FF', fontSize: 10, fontWeight: '700' },
 
   registerWrap: { marginTop: 24, alignItems: 'center' },
   registerText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
-  registerLink: { color: '#00A0D2', fontWeight: '700' },
+  registerLink: { color: '#00D4FF', fontWeight: '700' },
 });

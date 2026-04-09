@@ -351,7 +351,7 @@ export default function VenueAdminScreen({ navigation }) {
   if (loading) return (
     <View style={styles.container}>
       <Header navigation={navigation} insets={insets} />
-      <View style={styles.centered}><ActivityIndicator color="#00A0D2" size="large" /></View>
+      <View style={styles.centered}><ActivityIndicator color="#00D4FF" size="large" /></View>
     </View>
   );
 
@@ -426,7 +426,7 @@ export default function VenueAdminScreen({ navigation }) {
                     value={val}
                     onChangeText={set}
                     keyboardType={keyboard}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#8B9BB4"
                     placeholder={label}
                   />
                 </View>
@@ -459,8 +459,8 @@ export default function VenueAdminScreen({ navigation }) {
                   <Switch
                     value={!!features[fl.key]}
                     onValueChange={v => setFeatures(prev => ({ ...prev, [fl.key]: v }))}
-                    trackColor={{ false: '#E2E8F0', true: '#001F5B' }}
-                    thumbColor={features[fl.key] ? '#00A0D2' : '#fff'}
+                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(0,212,255,0.3)' }}
+                    thumbColor={features[fl.key] ? '#00D4FF' : 'rgba(255,255,255,0.6)'}
                   />
                 </View>
               ))}
@@ -506,7 +506,7 @@ export default function VenueAdminScreen({ navigation }) {
                     <View style={styles.matchRowRight}>
                       <Text style={styles.matchRowPlayers}>{m.current_players ?? 0}/{m.max_players}</Text>
                       <View style={[styles.statusBadge, done ? styles.statusDone : styles.statusOpen]}>
-                        <Text style={[styles.statusBadgeText, { color: done ? '#059669' : '#00A0D2' }]}>
+                        <Text style={[styles.statusBadgeText, { color: done ? '#00E096' : '#00D4FF' }]}>
                           {done ? 'Bitti' : 'Açık'}
                         </Text>
                       </View>
@@ -544,15 +544,15 @@ export default function VenueAdminScreen({ navigation }) {
                     <TouchableOpacity style={styles.stockBtn} onPress={() => updateStock(prod.id, -1)}>
                       <Text style={styles.stockBtnText}>−</Text>
                     </TouchableOpacity>
-                    <Text style={[styles.stockNum, prod.stock === 0 && { color: '#EF4444' }]}>{prod.stock}</Text>
+                    <Text style={[styles.stockNum, prod.stock === 0 && { color: '#FF4757' }]}>{prod.stock}</Text>
                     <TouchableOpacity style={styles.stockBtn} onPress={() => updateStock(prod.id, 1)}>
                       <Text style={styles.stockBtnText}>+</Text>
                     </TouchableOpacity>
                     <Switch
                       value={!!prod.is_available}
                       onValueChange={() => toggleAvailable(prod.id, prod.is_available)}
-                      trackColor={{ false: '#E2E8F0', true: '#001F5B' }}
-                      thumbColor={prod.is_available ? '#00A0D2' : '#fff'}
+                      trackColor={{ false: 'rgba(255,255,255,0.1)', true: 'rgba(0,212,255,0.3)' }}
+                      thumbColor={prod.is_available ? '#00D4FF' : 'rgba(255,255,255,0.6)'}
                       style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                     />
                     <TouchableOpacity onPress={() => deleteProduct(prod.id)}>
@@ -570,7 +570,7 @@ export default function VenueAdminScreen({ navigation }) {
           <>
             <Text style={styles.sectionTitle}>Son 7 Gün</Text>
             {loadingReport ? (
-              <View style={styles.centered}><ActivityIndicator color="#00A0D2" /></View>
+              <View style={styles.centered}><ActivityIndicator color="#00D4FF" /></View>
             ) : report ? (
               <>
                 <View style={styles.reportGrid}>
@@ -622,7 +622,7 @@ export default function VenueAdminScreen({ navigation }) {
                   <Text style={styles.matchModalFormat}>{matchModal.format} · {formatShort(matchModal.match_date)}</Text>
                   <Text style={[styles.matchModalStatus,
                     (matchModal.status === 'completed' || matchModal.status === 'played')
-                      ? { color: '#22C55E' } : { color: '#00A0D2' }]}>
+                      ? { color: '#00E096' } : { color: '#00D4FF' }]}>
                     {(matchModal.status === 'completed' || matchModal.status === 'played') ? '✅ Tamamlandı' : '🔴 Devam Ediyor'}
                   </Text>
                 </View>
@@ -706,7 +706,7 @@ export default function VenueAdminScreen({ navigation }) {
                   onChangeText={set}
                   keyboardType={keyboard}
                   placeholder={label}
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#8B9BB4"
                 />
               </View>
             ))}
@@ -756,116 +756,116 @@ function ReportCard({ icon, val, label, color }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
   centered:  { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
 
-  header: { backgroundColor: '#001F5B', paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText:    { color: 'rgba(255,255,255,0.55)', fontSize: 14 },
+  header: { backgroundColor: '#0A1628', paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
+  backText:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
 
-  venueSelector: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0', maxHeight: 60 },
-  venuePill:           { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  venuePillActive:     { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  venuePillText:       { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  venuePillTextActive: { color: '#fff' },
+  venueSelector: { backgroundColor: '#0A1628', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)', maxHeight: 60 },
+  venuePill:           { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  venuePillActive:     { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  venuePillText:       { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  venuePillTextActive: { color: '#00D4FF' },
 
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  tabs: { flexDirection: 'row', backgroundColor: '#0A1628', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
   tabBtn:         { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabBtnActive:   { borderBottomWidth: 2.5, borderBottomColor: '#001F5B' },
-  tabBtnText:     { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
-  tabBtnTextActive: { color: '#001F5B' },
+  tabBtnActive:   { borderBottomWidth: 2.5, borderBottomColor: '#00D4FF' },
+  tabBtnText:     { fontSize: 11, fontWeight: '600', color: '#8B9BB4' },
+  tabBtnTextActive: { color: '#00D4FF' },
 
   scroll: { padding: 16 },
 
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#001F5B', marginTop: 8, marginBottom: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', marginTop: 8, marginBottom: 10 },
 
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  card: { backgroundColor: '#0F1E35', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
 
   inputGroup: { marginBottom: 12 },
-  inputLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 4 },
-  inputField: { backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#001F5B' },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: '#8B9BB4', marginBottom: 4 },
+  inputField: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,212,255,0.15)', paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#FFFFFF' },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  chip:         { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  chipActive:   { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  chipText:     { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  chipTextActive: { color: '#fff' },
+  chip:         { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  chipActive:   { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  chipText:     { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  chipTextActive: { color: '#00D4FF' },
 
-  featureRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  featureLabel: { fontSize: 14, color: '#001F5B', fontWeight: '500' },
+  featureRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
+  featureLabel: { fontSize: 14, color: '#FFFFFF', fontWeight: '500' },
 
-  saveFullBtn: { backgroundColor: '#001F5B', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 8, marginBottom: 8 },
-  saveFullBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  saveFullBtn: { backgroundColor: '#00D4FF', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 8, marginBottom: 8 },
+  saveFullBtnText: { color: '#0A1628', fontSize: 15, fontWeight: '700' },
 
   matchSummaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  matchSummaryBox: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center', shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
-  matchSummaryNum:   { fontSize: 26, fontWeight: '900', color: '#001F5B' },
-  matchSummaryLabel: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  matchSummaryBox: { flex: 1, backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  matchSummaryNum:   { fontSize: 26, fontWeight: '900', color: '#FFFFFF' },
+  matchSummaryLabel: { fontSize: 11, color: '#8B9BB4', marginTop: 2 },
 
-  matchRow:       { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
+  matchRow:       { backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,212,255,0.1)' },
   matchRowLeft:   { gap: 2 },
   matchRowRight:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  matchRowFormat: { fontSize: 14, fontWeight: '700', color: '#001F5B' },
-  matchRowTime:   { fontSize: 12, color: '#64748B' },
-  matchRowPlayers: { fontSize: 13, fontWeight: '600', color: '#001F5B' },
+  matchRowFormat: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  matchRowTime:   { fontSize: 12, color: '#8B9BB4' },
+  matchRowPlayers: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusDone: { backgroundColor: '#D1FAE5' },
-  statusOpen: { backgroundColor: '#E8F4FB' },
+  statusDone: { backgroundColor: 'rgba(0,224,150,0.12)' },
+  statusOpen: { backgroundColor: 'rgba(0,212,255,0.1)' },
   statusBadgeText: { fontSize: 11, fontWeight: '700' },
 
   marketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  addProductBtn:    { backgroundColor: '#001F5B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
-  addProductBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  addProductBtn:    { backgroundColor: '#00D4FF', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
+  addProductBtnText: { color: '#0A1628', fontSize: 13, fontWeight: '700' },
 
-  productRow:   { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
+  productRow:   { backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,212,255,0.1)' },
   productLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   productRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   productEmoji: { fontSize: 26 },
-  productName:  { fontSize: 13, fontWeight: '700', color: '#001F5B' },
-  productPrice: { fontSize: 12, color: '#64748B' },
+  productName:  { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  productPrice: { fontSize: 12, color: '#8B9BB4' },
 
-  stockBtn:     { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  stockBtnText: { fontSize: 16, fontWeight: '700', color: '#001F5B' },
-  stockNum:     { fontSize: 14, fontWeight: '800', color: '#001F5B', minWidth: 20, textAlign: 'center' },
+  stockBtn:     { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  stockBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  stockNum:     { fontSize: 14, fontWeight: '800', color: '#FFFFFF', minWidth: 20, textAlign: 'center' },
 
   reportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
-  reportCard:      { flex: 1, minWidth: '44%', backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center', borderTopWidth: 3, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
+  reportCard:      { flex: 1, minWidth: '44%', backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, alignItems: 'center', borderTopWidth: 3, borderWidth: 1, borderColor: 'rgba(0,212,255,0.1)' },
   reportCardIcon:  { fontSize: 24, marginBottom: 4 },
   reportCardVal:   { fontSize: 22, fontWeight: '900', marginBottom: 2 },
-  reportCardLabel: { fontSize: 11, color: '#64748B' },
+  reportCardLabel: { fontSize: 11, color: '#8B9BB4' },
 
   formatRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
-  formatLabel:  { fontSize: 13, fontWeight: '600', color: '#001F5B', width: 60 },
-  formatBarWrap: { flex: 1, height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
-  formatBar:    { height: 8, backgroundColor: '#001F5B', borderRadius: 4 },
-  formatCount:  { fontSize: 13, fontWeight: '700', color: '#001F5B', width: 20, textAlign: 'right' },
+  formatLabel:  { fontSize: 13, fontWeight: '600', color: '#FFFFFF', width: 60 },
+  formatBarWrap: { flex: 1, height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' },
+  formatBar:    { height: 8, backgroundColor: '#00D4FF', borderRadius: 4 },
+  formatCount:  { fontSize: 13, fontWeight: '700', color: '#FFFFFF', width: 20, textAlign: 'right' },
 
-  emptyBox:  { backgroundColor: '#fff', borderRadius: 14, padding: 32, alignItems: 'center', marginBottom: 12 },
-  emptyText: { color: '#94A3B8', fontSize: 14, textAlign: 'center' },
+  emptyBox:  { backgroundColor: '#0F1E35', borderRadius: 14, padding: 32, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: 'rgba(0,212,255,0.1)' },
+  emptyText: { color: '#8B9BB4', fontSize: 14, textAlign: 'center' },
 
-  noVenueText: { fontSize: 20, fontWeight: '800', color: '#001F5B', marginBottom: 8 },
-  noVenueSub:  { fontSize: 14, color: '#64748B', textAlign: 'center' },
+  noVenueText: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 8 },
+  noVenueSub:  { fontSize: 14, color: '#8B9BB4', textAlign: 'center' },
 
   // Match Modal
-  modalContainer: { flex: 1, backgroundColor: '#F4F6F9' },
-  modalHeader:    { backgroundColor: '#001F5B', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20 },
+  modalContainer: { flex: 1, backgroundColor: '#0A1628' },
+  modalHeader:    { backgroundColor: '#0A1628', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
   modalTitle:     { color: '#fff', fontSize: 18, fontWeight: '800' },
-  modalClose:     { color: 'rgba(255,255,255,0.6)', fontSize: 18, fontWeight: '700' },
+  modalClose:     { color: 'rgba(255,255,255,0.5)', fontSize: 18, fontWeight: '700' },
   modalScroll:    { padding: 16 },
 
-  matchModalInfo:   { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 16, alignItems: 'center', gap: 6 },
-  matchModalFormat: { fontSize: 16, fontWeight: '800', color: '#001F5B' },
+  matchModalInfo:   { backgroundColor: '#0F1E35', borderRadius: 14, padding: 16, marginBottom: 16, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  matchModalFormat: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   matchModalStatus: { fontSize: 14, fontWeight: '600' },
 
-  playerStatRow:    { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, shadowColor: '#001F5B', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  playerStatName:   { fontSize: 14, fontWeight: '700', color: '#001F5B', marginBottom: 10 },
+  playerStatRow:    { backgroundColor: '#0F1E35', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(0,212,255,0.1)' },
+  playerStatName:   { fontSize: 14, fontWeight: '700', color: '#FFFFFF', marginBottom: 10 },
   playerStatInputs: { flexDirection: 'row', gap: 20 },
   statInputGroup:   { alignItems: 'center', gap: 6 },
-  statInputLabel:   { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  statInputLabel:   { fontSize: 12, color: '#8B9BB4', fontWeight: '600' },
   statCounter:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  counterBtn:       { fontSize: 20, fontWeight: '700', color: '#001F5B', width: 30, textAlign: 'center' },
-  counterNum:       { fontSize: 18, fontWeight: '900', color: '#001F5B', minWidth: 24, textAlign: 'center' },
+  counterBtn:       { fontSize: 20, fontWeight: '700', color: '#00D4FF', width: 30, textAlign: 'center' },
+  counterNum:       { fontSize: 18, fontWeight: '900', color: '#FFFFFF', minWidth: 24, textAlign: 'center' },
 
   finishMatchBtn:     { backgroundColor: '#10B981', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 16 },
   finishMatchBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

@@ -112,14 +112,14 @@ export default function RegisterScreen({ navigation }) {
 
       <TouchableOpacity style={[styles.btnPrimary, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading}>
         {loading
-          ? <ActivityIndicator color="#001F5B" />
+          ? <ActivityIndicator color="#0A1628" />
           : <Text style={styles.btnPrimaryText}>Kayıt Ol</Text>
         }
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate('Login')}>
         <Text style={styles.loginText}>
-          Zaten hesabın var mı? <Text style={{ color: '#00A0D2' }}>Giriş yap</Text>
+          Zaten hesabın var mı? <Text style={{ color: '#00D4FF' }}>Giriş yap</Text>
         </Text>
       </TouchableOpacity>
     </ScrollView>
@@ -128,7 +128,7 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#001F5B', paddingHorizontal: 28, paddingTop: 20 },
+  container: { flex: 1, backgroundColor: '#0A1628', paddingHorizontal: 28, paddingTop: 20 },
   back: { marginBottom: 32 },
   backText: { color: 'rgba(255,255,255,0.5)', fontSize: 15 },
   header: { marginBottom: 32 },
@@ -139,10 +139,10 @@ const styles = StyleSheet.create({
   input: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   positionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   posBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.06)' },
-  posBtnActive: { backgroundColor: '#00A0D2', borderColor: '#00A0D2' },
+  posBtnActive: { backgroundColor: '#00D4FF', borderColor: '#00D4FF' },
   posBtnText: { color: '#FFFFFF', fontSize: 13 },
   posBtnTextActive: { fontWeight: '700' },
-  btnPrimary: { backgroundColor: '#00A0D2', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
-  btnPrimaryText: { color: '#001F5B', fontSize: 16, fontWeight: '700' },
+  btnPrimary: { backgroundColor: '#00D4FF', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
+  btnPrimaryText: { color: '#0A1628', fontSize: 16, fontWeight: '700' },
   loginText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center' },
 });

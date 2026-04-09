@@ -12,21 +12,10 @@ function haptic() {
   try { require('expo-haptics').impactAsync(require('expo-haptics').ImpactFeedbackStyle.Light); } catch (_) {}
 }
 
-const FALLBACK_PRODUCTS = [
-  { id: 'f1', emoji: '🧃', name: 'Kutu içecek',    price: 15, category: '💧 İçecek',   stock: 10, is_available: true },
-  { id: 'f2', emoji: '💧', name: 'Şişe su',         price: 10, category: '💧 İçecek',   stock: 20, is_available: true },
-  { id: 'f3', emoji: '🥤', name: 'Enerji içeceği',  price: 25, category: '💧 İçecek',   stock: 5,  is_available: true },
-  { id: 'f4', emoji: '👟', name: 'Kiralık krampon',  price: 50, category: '👟 Ekipman',  stock: 3,  is_available: true, unit: '/maç' },
-  { id: 'f5', emoji: '⚽', name: 'Maç topu',        price: 40, category: '👟 Ekipman',  stock: 4,  is_available: true, unit: '/maç' },
-  { id: 'f6', emoji: '🧤', name: 'Kaleci eldiveni', price: 30, category: '👟 Ekipman',  stock: 2,  is_available: true, unit: '/maç' },
-  { id: 'f7', emoji: '🩴', name: 'Havlu',           price: 20, category: '🎽 Aksesuar', stock: 8,  is_available: true },
-  { id: 'f8', emoji: '🧦', name: 'Çorap',           price: 25, category: '🎽 Aksesuar', stock: 6,  is_available: true },
-];
-
 const EMOJI_BG = {
-  '💧 İçecek':   '#DBEAFE',
-  '👟 Ekipman':  '#D1FAE5',
-  '🎽 Aksesuar': '#FEF3C7',
+  '💧 İçecek':   'rgba(59,130,246,0.15)',
+  '👟 Ekipman':  'rgba(16,185,129,0.15)',
+  '🎽 Aksesuar': 'rgba(245,158,11,0.15)',
 };
 
 export default function MarketScreen({ navigation, route }) {
@@ -38,16 +27,17 @@ export default function MarketScreen({ navigation, route }) {
   const [cat, setCat]           = useState('Tümü');
   const [categories, setCategories] = useState(['Tümü']);
 
-  const venueId = route?.params?.venue_id;
-  const matchId = route?.params?.match_id;
+  const venueId = route?.params?.venueId ?? route?.params?.venue_id ?? null;
+  const matchId = route?.params?.matchId ?? route?.params?.match_id ?? null;
 
   useEffect(() => {
-    loadProducts();
+    if (venueId) loadProducts();
+    else setLoading(false);
   }, [venueId]);
 
   async function loadProducts() {
     setLoading(true);
-    if (venueId) {
+    try {
       const { data, error } = await supabase
         .from('venue_products')
         .select('*')
@@ -55,18 +45,15 @@ export default function MarketScreen({ navigation, route }) {
         .eq('is_available', true)
         .order('category')
         .order('name');
-      if (!error && data && data.length > 0) {
-        setProducts(data);
-        const cats = ['Tümü', ...new Set(data.map(p => p.category))];
-        setCategories(cats);
-        setLoading(false);
-        return;
-      }
+      if (error) throw error;
+      setProducts(data || []);
+      const cats = ['Tümü', ...new Set((data || []).map(p => p.category))];
+      setCategories(cats);
+    } catch (e) {
+      Alert.alert('Hata', 'Ürünler yüklenirken bir sorun oluştu.');
+    } finally {
+      setLoading(false);
     }
-    // Fallback: statik ürünler
-    setProducts(FALLBACK_PRODUCTS);
-    setCategories(['Tümü', '💧 İçecek', '👟 Ekipman', '🎽 Aksesuar']);
-    setLoading(false);
   }
 
   function handleAdd(product) {
@@ -124,6 +111,29 @@ export default function MarketScreen({ navigation, route }) {
 
   const filtered = cat === 'Tümü' ? products : products.filter(p => p.category === cat);
 
+  // Tam ekran engel: venueId yoksa market açılamaz
+  if (!venueId) {
+    return (
+      <View style={[styles.container, styles.noVenueContainer]}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>← Geri</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Market 🛒</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={styles.noVenueBody}>
+          <Text style={styles.noVenueEmoji}>🛒</Text>
+          <Text style={styles.noVenueTitle}>Market Kapalı</Text>
+          <Text style={styles.noVenueSub}>Market sadece aktif bir maçtan açılabilir 🛒</Text>
+          <TouchableOpacity style={styles.noVenueBtn} onPress={() => navigation.navigate('MatchList')}>
+            <Text style={styles.noVenueBtnText}>Maç Bul →</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -141,13 +151,6 @@ export default function MarketScreen({ navigation, route }) {
           )}
         </TouchableOpacity>
       </View>
-
-      {/* Uyarı: venue_id yoksa */}
-      {!venueId && (
-        <View style={styles.warningBar}>
-          <Text style={styles.warningText}>⚠️ Saha bağlantısı yok — sipariş kaydedilmeyecek.</Text>
-        </View>
-      )}
 
       {/* Sepet paneli */}
       {showCart && cartCount > 0 && (
@@ -184,7 +187,13 @@ export default function MarketScreen({ navigation, route }) {
       </View>
 
       {loading ? (
-        <View style={styles.loadingWrap}><ActivityIndicator color="#00A0D2" size="large" /></View>
+        <View style={styles.loadingWrap}><ActivityIndicator color="#00D4FF" size="large" /></View>
+      ) : products.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyEmoji}>🏪</Text>
+          <Text style={styles.emptyTitle}>Market Yok</Text>
+          <Text style={styles.emptySub}>Bu sahada henüz market kurulmamış</Text>
+        </View>
       ) : (
         <FlatList
           data={filtered}
@@ -197,7 +206,7 @@ export default function MarketScreen({ navigation, route }) {
             const inStock = item.is_available && (item.stock === undefined || item.stock > 0);
             return (
               <View style={[styles.productCard, !inStock && styles.productCardOut]}>
-                <View style={[styles.productEmojiWrap, { backgroundColor: EMOJI_BG[item.category] || '#F1F5F9' }]}>
+                <View style={[styles.productEmojiWrap, { backgroundColor: EMOJI_BG[item.category] || 'rgba(255,255,255,0.06)' }]}>
                   <Text style={styles.productEmoji}>{item.emoji || '📦'}</Text>
                 </View>
                 <Text style={styles.productName}>{item.name}</Text>
@@ -238,56 +247,66 @@ export default function MarketScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F6F9' },
+  container: { flex: 1, backgroundColor: '#0A1628' },
 
-  header: { backgroundColor: '#001F5B', paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backText: { color: 'rgba(255,255,255,0.55)', fontSize: 14 },
+  header: { backgroundColor: '#0A1628', paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.12)' },
+  backText: { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
   cartBtn: { position: 'relative', width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   cartIcon: { fontSize: 22 },
-  cartBadge: { position: 'absolute', top: -2, right: -4, backgroundColor: '#EF4444', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  cartBadge: { position: 'absolute', top: -2, right: -4, backgroundColor: '#FF4757', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   cartBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
 
-  warningBar: { backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8 },
-  warningText: { fontSize: 12, color: '#92400E', fontWeight: '600', textAlign: 'center' },
+  noVenueContainer: { flex: 1, backgroundColor: '#0A1628' },
+  noVenueBody:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  noVenueEmoji:     { fontSize: 64, marginBottom: 20 },
+  noVenueTitle:     { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
+  noVenueSub:       { fontSize: 15, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+  noVenueBtn:       { backgroundColor: '#00D4FF', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
+  noVenueBtnText:   { color: '#0A1628', fontSize: 15, fontWeight: '800' },
 
-  cartPanel: { backgroundColor: '#fff', margin: 16, borderRadius: 16, padding: 16, shadowColor: '#001F5B', shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
-  cartRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  cartRowText: { fontSize: 13, color: '#001F5B' },
-  cartRowRight: { fontSize: 13, fontWeight: '700', color: '#001F5B' },
+  emptyWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  emptyEmoji: { fontSize: 52, marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  emptySub:   { fontSize: 14, color: '#8B9BB4', textAlign: 'center' },
+
+  cartPanel: { backgroundColor: '#0F1E35', margin: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(0,212,255,0.15)' },
+  cartRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
+  cartRowText: { fontSize: 13, color: '#FFFFFF' },
+  cartRowRight: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   cartTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 14 },
-  cartTotalLabel: { fontSize: 14, fontWeight: '700', color: '#64748B' },
-  cartTotalPrice: { fontSize: 18, fontWeight: '900', color: '#001F5B' },
-  checkoutBtn: { backgroundColor: '#001F5B', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  checkoutBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  cartTotalLabel: { fontSize: 14, fontWeight: '700', color: '#8B9BB4' },
+  cartTotalPrice: { fontSize: 18, fontWeight: '900', color: '#FFFFFF' },
+  checkoutBtn: { backgroundColor: '#00D4FF', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  checkoutBtnText: { color: '#0A1628', fontSize: 13, fontWeight: '700' },
 
-  catBar: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  catBar: { backgroundColor: '#0A1628', borderBottomWidth: 1, borderBottomColor: 'rgba(0,212,255,0.08)' },
   catScroll: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  catChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#fff' },
-  catChipActive: { backgroundColor: '#001F5B', borderColor: '#001F5B' },
-  catChipText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  catChipTextActive: { color: '#fff' },
+  catChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.2)', backgroundColor: 'rgba(255,255,255,0.04)' },
+  catChipActive: { backgroundColor: 'rgba(0,212,255,0.12)', borderColor: '#00D4FF' },
+  catChipText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+  catChipTextActive: { color: '#00D4FF' },
 
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   grid: { padding: 12 },
   gridRow: { gap: 12 },
-  productCard: { flex: 1, backgroundColor: '#fff', borderRadius: 18, padding: 14, marginBottom: 12, alignItems: 'center', gap: 8, shadowColor: '#001F5B', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  productCardOut: { opacity: 0.6 },
+  productCard: { flex: 1, backgroundColor: '#0F1E35', borderRadius: 18, padding: 14, marginBottom: 12, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(0,212,255,0.12)' },
+  productCardOut: { opacity: 0.5 },
   productEmojiWrap: { width: 60, height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   productEmoji: { fontSize: 30 },
-  productName: { fontSize: 13, fontWeight: '700', color: '#001F5B', textAlign: 'center' },
-  productPrice: { fontSize: 15, fontWeight: '800', color: '#00A0D2' },
+  productName: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+  productPrice: { fontSize: 15, fontWeight: '800', color: '#00D4FF' },
   stockText: { fontSize: 11, fontWeight: '600' },
-  stockIn: { color: '#10B981' },
-  stockOut: { color: '#EF4444' },
-  addBtn: { backgroundColor: '#001F5B', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, width: '100%', alignItems: 'center' },
-  addBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  addBtnDisabled: { backgroundColor: '#E2E8F0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, width: '100%', alignItems: 'center' },
-  addBtnDisabledText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  stockIn: { color: '#00E096' },
+  stockOut: { color: '#FF4757' },
+  addBtn: { backgroundColor: '#00D4FF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, width: '100%', alignItems: 'center' },
+  addBtnText: { color: '#0A1628', fontSize: 12, fontWeight: '700' },
+  addBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, width: '100%', alignItems: 'center' },
+  addBtnDisabledText: { color: '#8B9BB4', fontSize: 12, fontWeight: '600' },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  qtyBtnAdd: { backgroundColor: '#001F5B' },
-  qtyBtnText: { fontSize: 16, fontWeight: '700', color: '#001F5B' },
-  qtyNum: { fontSize: 16, fontWeight: '800', color: '#001F5B', minWidth: 20, textAlign: 'center' },
+  qtyBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  qtyBtnAdd: { backgroundColor: '#00D4FF' },
+  qtyBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  qtyNum: { fontSize: 16, fontWeight: '800', color: '#FFFFFF', minWidth: 20, textAlign: 'center' },
 });

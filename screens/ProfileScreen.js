@@ -255,17 +255,17 @@ export default function ProfileScreen({ navigation, route }) {
   if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color="#00A0D2" size="large" />
+        <ActivityIndicator color="#00D4FF" size="large" />
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#001F5B' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: '#fff', fontSize: 16 }}>Profil bulunamadı.</Text>
         <TouchableOpacity style={{ marginTop: 16 }} onPress={() => navigation.goBack()}>
-          <Text style={{ color: '#00A0D2', fontSize: 15 }}>← Geri dön</Text>
+          <Text style={{ color: '#00D4FF', fontSize: 15 }}>← Geri dön</Text>
         </TouchableOpacity>
       </View>
     );
@@ -498,7 +498,7 @@ export default function ProfileScreen({ navigation, route }) {
         {tab === 'history' && (
           <View style={styles.section}>
             {historyLoading ? (
-              <ActivityIndicator color="#00A0D2" style={{ marginTop: 20 }} />
+              <ActivityIndicator color="#00D4FF" style={{ marginTop: 20 }} />
             ) : matchHistory.length === 0 ? (
               <View style={styles.emptyHistory}>
                 <Text style={styles.emptyHistoryIcon}>⚽</Text>

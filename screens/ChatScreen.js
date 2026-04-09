@@ -169,7 +169,7 @@ export default function ChatScreen({ navigation, route }) {
       {/* Mesajlar */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#00A0D2" size="large" />
+          <ActivityIndicator color="#00D4FF" size="large" />
         </View>
       ) : (
         <ScrollView

@@ -63,6 +63,31 @@ function MatchCard({ match, onPress }) {
   );
 }
 
+function SeekingCard({ match, onApply }) {
+  const fmtColor = FORMAT_COLORS[match.format] || '#3B82F6';
+  return (
+    <View style={styles.seekingCard}>
+      <View style={[styles.seekingCardStrip, { backgroundColor: '#FFB800' }]} />
+      <View style={styles.seekingCardBody}>
+        <Text style={styles.seekingCardVenue} numberOfLines={1}>{match.venues?.name || 'Saha'}</Text>
+        <View style={[styles.seekingCardFmt, { backgroundColor: fmtColor + '22' }]}>
+          <Text style={[styles.seekingCardFmtText, { color: fmtColor }]}>{match.format || '5v5'}</Text>
+        </View>
+        <View style={styles.seekingCardPositions}>
+          {(match.needed_positions || []).slice(0, 3).map(pos => (
+            <View key={pos} style={styles.seekingPosBadge}>
+              <Text style={styles.seekingPosBadgeText}>{pos}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.seekingCardBtn} onPress={onApply}>
+          <Text style={styles.seekingCardBtnText}>Başvur →</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const VENUE_COLORS = ['#0D1F3C', '#1A0F3C', '#0F2A1A', '#2A0F1A', '#1A2A0F', '#0F1A2A'];
 
 function VenueCard({ venue, onPress }) {
@@ -92,6 +117,7 @@ export default function HomeScreen({ navigation }) {
   const [profile, setProfile]   = useState(null);
   const [matches, setMatches]   = useState([]);
   const [venues,  setVenues]    = useState([]);
+  const [seekingMatches, setSeekingMatches] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const xpAnim = useRef(new Animated.Value(0)).current;
@@ -104,12 +130,14 @@ export default function HomeScreen({ navigation }) {
         const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setProfile(prof);
       }
-      const [{ data: matchData }, { data: venueData }] = await Promise.all([
+      const [{ data: matchData }, { data: venueData }, { data: seekingData }] = await Promise.all([
         supabase.from('matches').select('*, venues(name, district, city)').eq('status', 'open').order('match_date', { ascending: true }).limit(8),
         supabase.from('venues').select('*').order('rating', { ascending: false }).limit(6),
+        supabase.from('matches').select('*, venues(name, district, city)').eq('status', 'open').eq('is_seeking_players', true).order('match_date', { ascending: true }).limit(3),
       ]);
       setMatches(matchData || []);
       setVenues(venueData || []);
+      setSeekingMatches(seekingData || []);
     } catch (err) {
       console.warn('fetchData error:', err);
       Alert.alert('Hata', 'Veriler yüklenirken bir sorun oluştu.');
@@ -249,6 +277,31 @@ export default function HomeScreen({ navigation }) {
               />
             )}
           />
+        )}
+
+        {/* ── Oyuncu Aranıyor ── */}
+        {seekingMatches.length > 0 && (
+          <>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>⚡ OYUNCU ARANIYOR</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('MatchList')}>
+                <Text style={styles.seeAll}>Tümü →</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={seekingMatches}
+              keyExtractor={item => item.id?.toString()}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.matchScroll}
+              renderItem={({ item }) => (
+                <SeekingCard
+                  match={item}
+                  onApply={() => navigation.navigate('MatchList')}
+                />
+              )}
+            />
+          </>
         )}
 
         {/* ── Bursa Sahaları ── */}
@@ -437,4 +490,22 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabText: { color: '#0A1628', fontSize: 28, fontWeight: '900', marginTop: -2 },
+
+  seekingCard: {
+    width: 200,
+    backgroundColor: '#0F1E35',
+    borderRadius: 16, marginRight: 12, overflow: 'hidden',
+    flexDirection: 'row',
+    borderWidth: 1, borderColor: 'rgba(255,184,0,0.25)',
+  },
+  seekingCardStrip:     { width: 4 },
+  seekingCardBody:      { flex: 1, padding: 12, gap: 6 },
+  seekingCardVenue:     { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  seekingCardFmt:       { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  seekingCardFmtText:   { fontSize: 10, fontWeight: '700' },
+  seekingCardPositions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  seekingPosBadge:      { backgroundColor: 'rgba(255,184,0,0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,184,0,0.3)' },
+  seekingPosBadgeText:  { fontSize: 9, fontWeight: '700', color: '#FFB800' },
+  seekingCardBtn:       { backgroundColor: '#FFB800', borderRadius: 8, paddingVertical: 6, alignItems: 'center', marginTop: 2 },
+  seekingCardBtnText:   { color: '#0A1628', fontSize: 11, fontWeight: '800' },
 });
