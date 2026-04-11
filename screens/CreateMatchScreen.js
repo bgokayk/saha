@@ -109,7 +109,7 @@ export default function CreateMatchScreen({ navigation, route }) {
 
       const maxP = FORMATS.find(f => f.id === format)?.players || 10;
 
-      const { error, data: created } = await supabase.from('matches').insert({
+      const matchData = {
         venue_id:           venue.id,
         organizer_id:       user.id,
         format,
@@ -117,11 +117,29 @@ export default function CreateMatchScreen({ navigation, route }) {
         max_players:        maxP,
         price:              price ? parseInt(price) : (venue.price_per_hour || 300),
         status:             'open',
-        is_seeking_players: isSeeking,
-        needed_positions:   isSeeking ? neededPositions : [],
-      }).select().single();
+      };
+      // Bu kolonlar ALTER TABLE ile eklenmiş olmalı — yoksa hata vermemesi için kontrol
+      try {
+        matchData.is_seeking_players = isSeeking;
+        matchData.needed_positions = isSeeking ? neededPositions : [];
+      } catch (_) {}
 
-      if (error) { Alert.alert('Hata', error.message); return; }
+      const { error, data: created } = await supabase.from('matches').insert(matchData).select().single();
+
+      // Eğer is_seeking_players kolonu yoksa, o kolonlar olmadan tekrar dene
+      if (error?.message?.includes('is_seeking_players') || error?.message?.includes('needed_positions')) {
+        delete matchData.is_seeking_players;
+        delete matchData.needed_positions;
+        const retry = await supabase.from('matches').insert(matchData).select().single();
+        if (retry.error) { console.error('Match create retry error:', retry.error); Alert.alert('Hata', retry.error.message); return; }
+        haptic('success');
+        launchConfetti();
+        setCreatedMatch(retry.data);
+        setDone(true);
+        return;
+      }
+
+      if (error) { console.error('Match create error:', error); Alert.alert('Hata', error.message); return; }
 
       haptic('success');
       launchConfetti();
