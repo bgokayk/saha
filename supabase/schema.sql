@@ -95,6 +95,7 @@ create table if not exists match_players (
   id         uuid default gen_random_uuid() primary key,
   match_id   uuid references matches on delete cascade,
   user_id    uuid references auth.users on delete cascade,
+  team       text default 'home' check (team in ('home','away')),
   joined_at  timestamptz default now(),
   unique (match_id, user_id)
 );
@@ -205,11 +206,12 @@ create table if not exists venue_features (
 -- ── 11. MATCH_INVITES (Oyuncu Davetleri) ─────────────────────
 create table if not exists match_invites (
   id         uuid default gen_random_uuid() primary key,
+  match_id   uuid references matches on delete cascade,
   from_user  uuid references auth.users on delete cascade,
   to_user    uuid references auth.users on delete cascade,
   status     text default 'pending' check (status in ('pending','accepted','rejected')),
   created_at timestamptz default now(),
-  unique (from_user, to_user)
+  unique (match_id, from_user, to_user)
 );
 
 -- ── 12. ROW LEVEL SECURITY ──────────────────────────────────

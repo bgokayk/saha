@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, TextInput, Modal, Switch, Platform
+  ActivityIndicator, Alert, TextInput, Modal, Switch, Platform, Image
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,6 +55,7 @@ export default function VenueAdminScreen({ navigation }) {
   const [editLng, setEditLng]             = useState('');
   const [features, setFeatures]           = useState({});
   const [savingInfo, setSavingInfo]       = useState(false);
+  const [editDescription, setEditDescription] = useState('');
 
   // ── Maçlar ──
   const [matches, setMatches]             = useState([]);
@@ -88,6 +89,7 @@ export default function VenueAdminScreen({ navigation }) {
     loadFeatures(selected.id);
     setEditName(selected.name || '');
     setEditDesc(selected.description || '');
+    setEditDescription(selected.description || '');
     setEditPhone(selected.phone || '');
     setEditPrice(String(selected.price_per_hour || ''));
   }, [selected]);
@@ -212,15 +214,81 @@ export default function VenueAdminScreen({ navigation }) {
     }
   }
 
+  // ── Saha Fotoğrafı Yükle ──
+  // NOT: Supabase Dashboard'da 'venue-photos' bucket oluşturmanız gerekiyor.
+  // Storage → New Bucket → Name: "venue-photos" → Public: ON → Create
+  async function handlePickVenuePhoto() {
+    if (Platform.OS === 'web') {
+      Alert.alert('Bilgi', 'Fotoğraf yükleme mobil uygulamadan yapılabilir.');
+      return;
+    }
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('İzin Gerekli', 'Fotoğraf yüklemek için galeri izni verin.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      const fileName = `venue-${selected.id}-${Date.now()}.jpg`;
+      const filePath = `venue-photos/${fileName}`;
+
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from('venue-photos')
+        .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
+
+      if (uploadError) {
+        Alert.alert('Hata', 'Fotoğraf yüklenemedi: ' + uploadError.message);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('venue-photos')
+        .getPublicUrl(filePath);
+
+      const photoUrl = urlData.publicUrl;
+
+      const { error: updateError } = await supabase
+        .from('venues')
+        .update({ photo_url: photoUrl })
+        .eq('id', selected.id);
+
+      if (updateError) {
+        Alert.alert('Hata', 'Fotoğraf kaydedilemedi.');
+        return;
+      }
+
+      setVenues(prev => prev.map(v => v.id === selected.id ? { ...v, photo_url: photoUrl } : v));
+      setSelected(prev => ({ ...prev, photo_url: photoUrl }));
+      haptic('success');
+      Alert.alert('Başarılı! 📷', 'Saha fotoğrafı güncellendi.');
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Hata', 'Fotoğraf yüklenirken bir sorun oluştu.');
+    }
+  }
+
   // ── Saha Bilgisi Kaydet ──
   async function saveVenueInfo() {
     if (!selected) return;
     setSavingInfo(true);
     const venueUpdate = {};
-    if (editName.trim())  venueUpdate.name           = editName.trim();
-    if (editDesc.trim())  venueUpdate.description    = editDesc.trim();
-    if (editPhone.trim()) venueUpdate.phone           = editPhone.trim();
-    if (editPrice.trim()) venueUpdate.price_per_hour  = parseInt(editPrice, 10) || selected.price_per_hour;
+    if (editName.trim())        venueUpdate.name           = editName.trim();
+    if (editDesc.trim())        venueUpdate.description    = editDesc.trim();
+    if (editDescription !== undefined) venueUpdate.description = editDescription.trim() || editDesc.trim() || '';
+    if (editPhone.trim())       venueUpdate.phone           = editPhone.trim();
+    if (editPrice.trim())       venueUpdate.price_per_hour  = parseInt(editPrice, 10) || selected.price_per_hour;
 
     const { error: vErr } = await supabase.from('venues').update(venueUpdate).eq('id', selected.id);
     if (vErr) { Alert.alert('Hata', vErr.message); setSavingInfo(false); return; }
@@ -414,6 +482,37 @@ export default function VenueAdminScreen({ navigation }) {
         {/* ────────────── SAHA BİLGİSİ ────────────── */}
         {activeTab === 'info' && (
           <>
+            {/* Saha Fotoğrafı */}
+            <Text style={styles.sectionTitle}>📷 Saha Fotoğrafı</Text>
+            <TouchableOpacity style={styles.photoUploadArea} onPress={handlePickVenuePhoto} activeOpacity={0.85}>
+              {selected?.photo_url ? (
+                <Image source={{ uri: selected.photo_url }} style={styles.venuePhotoPreview} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Text style={styles.photoPlaceholderEmoji}>📷</Text>
+                  <Text style={styles.photoPlaceholderText}>Fotoğraf Yükle</Text>
+                  <Text style={styles.photoPlaceholderHint}>Sahayı en iyi gösteren fotoğrafı seç</Text>
+                </View>
+              )}
+              {selected?.photo_url && (
+                <View style={styles.photoChangeOverlay}>
+                  <Text style={styles.photoChangeText}>Değiştir 📷</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Açıklama */}
+            <Text style={styles.sectionTitle}>📝 Açıklama</Text>
+            <TextInput
+              style={[styles.inputField, { height: 80, textAlignVertical: 'top', marginBottom: 16 }]}
+              placeholder="Sahanızı tanıtın..."
+              placeholderTextColor="#8B9BB4"
+              value={editDescription}
+              onChangeText={setEditDescription}
+              multiline
+              numberOfLines={3}
+            />
+
             <Text style={styles.sectionTitle}>Temel Bilgiler</Text>
             <View style={styles.card}>
               {[
@@ -875,4 +974,39 @@ const styles = StyleSheet.create({
 
   finishMatchBtn:     { backgroundColor: '#10B981', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 16 },
   finishMatchBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  // Photo upload
+  photoUploadArea: {
+    backgroundColor: '#0F1E35',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,212,255,0.2)',
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    marginBottom: 16,
+    height: 200,
+  },
+  venuePhotoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  photoPlaceholderEmoji: { fontSize: 48 },
+  photoPlaceholderText:  { color: '#00D4FF', fontSize: 16, fontWeight: '700' },
+  photoPlaceholderHint:  { color: '#8B9BB4', fontSize: 12 },
+  photoChangeOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  photoChangeText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
 });

@@ -184,10 +184,18 @@ export default function CreateMatchScreen({ navigation, route }) {
         <Text style={styles.doneIcon}>⚽</Text>
         <Text style={styles.doneTitle}>Maç Oluşturuldu!</Text>
         <Text style={styles.doneSub}>Oyuncular katılmaya başlayabilir</Text>
+
+        {/* Rez Numarası */}
+        <View style={styles.rezBadge}>
+          <Text style={styles.rezLabel}>REZ NO</Text>
+          <Text style={styles.rezCode}>{createdMatch?.id?.slice(0, 8).toUpperCase() || '—'}</Text>
+        </View>
+
         <View style={styles.doneSummary}>
           <Text style={styles.doneLine}>🏟️ {venue?.name}</Text>
           <Text style={styles.doneLine}>⚽ {format} · {maxPlayers} oyuncu</Text>
           <Text style={styles.doneLine}>📅 {date} {time}</Text>
+          <Text style={styles.doneLine}>💳 {price || venue?.price_per_hour}₺ toplam</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
           <Text style={styles.shareBtnText}>Maçı Paylaş 📤</Text>
@@ -543,7 +551,10 @@ const styles = StyleSheet.create({
   doneContainer: { flex: 1, backgroundColor: '#0A1628', alignItems: 'center', justifyContent: 'center', padding: 32 },
   doneIcon: { fontSize: 72, marginBottom: 16 },
   doneTitle: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 8 },
-  doneSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, marginBottom: 28 },
+  doneSub: { color: 'rgba(255,255,255,0.6)', fontSize: 15, marginBottom: 16 },
+  rezBadge: { backgroundColor: 'rgba(0,212,255,0.1)', borderWidth: 1, borderColor: '#00D4FF', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 12, alignItems: 'center', marginBottom: 20 },
+  rezLabel: { color: '#00D4FF', fontSize: 10, fontWeight: '700', letterSpacing: 3, marginBottom: 4 },
+  rezCode: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', letterSpacing: 4 },
   doneSummary: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 18, width: '100%', gap: 8, marginBottom: 24 },
   doneLine: { color: '#fff', fontSize: 14 },
   shareBtn: { backgroundColor: '#C9A84C', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginBottom: 12, width: '100%', alignItems: 'center' },
