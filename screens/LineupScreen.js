@@ -479,21 +479,21 @@ export default function LineupScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: '#0A1628' },
 
-  header:      { paddingTop: 10, paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#040E1E' },
+  header:      { paddingTop: 10, paddingBottom: 14, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0A1628' },
   headerCenter:{ alignItems: 'center' },
   headerTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   headerSub:   { color: '#00D4FF', fontSize: 11, marginTop: 1 },
   backText:    { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
   clearText:   { color: '#EF4444', fontSize: 13 },
 
-  formatBar:   { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8, gap: 8, backgroundColor: '#040E1E' },
+  formatBar:   { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8, gap: 8, backgroundColor: '#0A1628' },
   fmtBtn:      { flex: 1, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   fmtBtnActive:{ backgroundColor: '#00D4FF', borderColor: '#00D4FF' },
   fmtText:     { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600' },
   fmtTextActive:{ color: '#FFFFFF' },
 
   // Team tabs
-  teamTabs:    { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, gap: 8, backgroundColor: '#040E1E' },
+  teamTabs:    { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, gap: 8, backgroundColor: '#0A1628' },
   teamTab:     { flex: 1, paddingVertical: 9, borderRadius: 20, alignItems: 'center', borderWidth: 1.5 },
   teamTabHomeActive: { backgroundColor: '#00D4FF', borderColor: '#00D4FF' },
   teamTabAwayActive: { backgroundColor: '#FFB800', borderColor: '#FFB800' },

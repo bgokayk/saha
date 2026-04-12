@@ -115,7 +115,7 @@ export default function WalletScreen({ navigation }) {
         <View style={styles.balanceCard}>
           <View style={styles.balanceDecor1} />
           <View style={styles.balanceDecor2} />
-          <Text style={styles.balanceLabel}>SAHA CÜZDANı</Text>
+          <Text style={styles.balanceLabel}>SAHA CÜZDANI</Text>
           {loading
             ? <ActivityIndicator color="#00D4FF" size="large" style={{ marginVertical: 12 }} />
             : <Text style={styles.balanceAmount}>{balance ?? 0}₺</Text>
@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
   },
   balanceDecor1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(0,212,255,0.04)', top: -60, right: -40 },
   balanceDecor2: { position: 'absolute', width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(255,184,0,0.03)', bottom: -30, left: -20 },
-  balanceLabel:  { color: '#00D4FF', fontSize: 10, fontWeight: '600', letterSpacing: 3, marginBottom: 8 },
-  balanceAmount: { color: '#FFFFFF', fontSize: 52, fontWeight: '900', marginBottom: 20, letterSpacing: -1 },
+  balanceLabel:  { color: '#00D4FF', fontSize: 10, fontWeight: '600', letterSpacing: 4, marginBottom: 8 },
+  balanceAmount: { color: '#FFFFFF', fontSize: 48, fontWeight: '900', marginBottom: 20, letterSpacing: -1 },
   balanceActions:   { flexDirection: 'row', gap: 10 },
   balanceActionBtn: { flex: 1, backgroundColor: 'rgba(0,212,255,0.08)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)' },
   balanceActionIcon:{ fontSize: 18 },

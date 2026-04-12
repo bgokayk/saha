@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   rezCode: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', letterSpacing: 4 },
   doneSummary: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 18, width: '100%', gap: 8, marginBottom: 24 },
   doneLine: { color: '#fff', fontSize: 14 },
-  shareBtn: { backgroundColor: '#C9A84C', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginBottom: 12, width: '100%', alignItems: 'center' },
+  shareBtn: { backgroundColor: '#FFB800', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginBottom: 12, width: '100%', alignItems: 'center' },
   shareBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   lineupBtn: { backgroundColor: '#10B981', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginBottom: 10, width: '100%', alignItems: 'center' },
   lineupBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

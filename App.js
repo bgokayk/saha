@@ -49,8 +49,8 @@ export default function App() {
   // Auth kontrol edilene kadar splash loader
   if (session === undefined) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#001F5B', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color="#00A0D2" size="large" />
+      <View style={{ flex: 1, backgroundColor: '#0A1628', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#00D4FF" size="large" />
       </View>
     );
   }

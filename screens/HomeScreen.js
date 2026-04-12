@@ -255,7 +255,7 @@ export default function HomeScreen({ navigation }) {
     { emoji: '⚽', title: 'Maç Kur',    desc: 'Hemen başlat',  color: '#00D4FF', screen: 'CreateMatch' },
     { emoji: '🔍', title: 'Maç Bul',    desc: 'Açık maçlar',   color: '#00E096', screen: 'MatchList'   },
     { emoji: '👥', title: 'Oyuncu Bul', desc: 'Swipe & davet', color: '#8B5CF6', screen: 'Discover'    },
-    { emoji: '🛒', title: 'Market',     desc: 'Ekipman al',    color: '#FFB800', screen: 'Market'      },
+    { emoji: '🛒', title: 'Market',     desc: 'Ekipman al',    color: '#FFB800', onPress: () => Alert.alert('Market', 'Market özelliğini kullanmak için önce bir maça katıl.\n\nMaç içinden markete erişebilirsin.') },
   ];
 
   return (
@@ -330,7 +330,7 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               key={i}
               style={styles.qaCard}
-              onPress={() => { haptic(); navigation.navigate(qa.screen); }}
+              onPress={() => { haptic(); qa.onPress ? qa.onPress() : navigation.navigate(qa.screen); }}
               activeOpacity={0.85}
             >
               <View style={[styles.qaEmojiWrap, { backgroundColor: qa.color + '20' }]}>
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
   xpFill: { height: 3, backgroundColor: '#00D4FF', borderRadius: 2 },
   xpText: { color: 'rgba(255,255,255,0.3)', fontSize: 10 },
 
-  sectionTitle: { fontSize: 10, fontWeight: '700', color: '#00D4FF', marginHorizontal: 20, marginTop: 20, marginBottom: 10, letterSpacing: 2 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', color: '#00D4FF', marginHorizontal: 20, marginTop: 20, marginBottom: 10, letterSpacing: 2 },
   sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 20, marginBottom: 10 },
   seeAll:       { color: '#00D4FF', fontSize: 12, fontWeight: '600' },
 

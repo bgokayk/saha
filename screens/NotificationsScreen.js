@@ -59,7 +59,7 @@ export default function NotificationsScreen({ navigation }) {
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔔</Text>
           <Text style={styles.emptyTitle}>Bildirim yok</Text>
-          <Text style={styles.emptySub}>Maçına oyuncu katılınca burada görünür</Text>
+          <Text style={styles.emptySub}>Yeni bildirimler burada görünecek</Text>
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   clearBtnText: { color: '#FF4757', fontSize: 13, fontWeight: '700' },
 
   empty:      { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  emptyIcon:  { fontSize: 52, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
-  emptySub:   { fontSize: 13, color: '#8B9BB4', textAlign: 'center' },
+  emptyIcon:  { fontSize: 64, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
+  emptySub:   { fontSize: 14, color: '#8B9BB4', textAlign: 'center' },
 });

@@ -441,10 +441,10 @@ export default function ProfileScreen({ navigation, route }) {
         {/* ── Stat Kartları ── */}
         <Animated.View style={[styles.statsGrid, { opacity: statsAnim }]}>
           {[
-            { icon: '🎮', num: profile.matches_played || 0, label: 'Maç',   bg: '#EFF6FF', ic: '#3B82F6' },
-            { icon: '⚽', num: profile.goals || 0,          label: 'Gol',   bg: '#FEF2F2', ic: '#EF4444' },
-            { icon: '🅰️', num: profile.assists || 0,         label: 'Asist', bg: '#F0FDF4', ic: '#22C55E' },
-            { icon: '📊', num: (profile.goals || 0) + (profile.assists || 0), label: 'Katkı', bg: '#FFFBEB', ic: '#F59E0B' },
+            { icon: '🎮', num: profile.matches_played || 0, label: 'Maç',   bg: 'rgba(0,212,255,0.07)',   ic: '#00D4FF' },
+            { icon: '⚽', num: profile.goals || 0,          label: 'Gol',   bg: 'rgba(255,71,87,0.07)',   ic: '#FF4757' },
+            { icon: '🅰️', num: profile.assists || 0,         label: 'Asist', bg: 'rgba(0,224,150,0.07)',   ic: '#00E096' },
+            { icon: '📊', num: (profile.goals || 0) + (profile.assists || 0), label: 'Katkı', bg: 'rgba(255,184,0,0.07)', ic: '#FFB800' },
           ].map((s, i) => (
             <View key={i} style={[styles.statCard, { backgroundColor: s.bg, borderTopColor: s.ic }]}>
               <Text style={styles.statIcon}>{s.icon}</Text>

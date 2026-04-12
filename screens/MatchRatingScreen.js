@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Share, Linking, Platform, Animated,
@@ -56,6 +56,12 @@ export default function MatchRatingScreen({ navigation, route }) {
       useNativeDriver: true,
     }).start();
   }, [step, currentPlayerIdx]);
+
+  useEffect(() => {
+    if (step === 'rate' && players.length > 0 && currentPlayerIdx >= players.length) {
+      setStep('share');
+    }
+  }, [step, currentPlayerIdx, players.length]);
 
   async function loadData() {
     if (!matchId) return;
@@ -315,7 +321,7 @@ export default function MatchRatingScreen({ navigation, route }) {
   // ════════════════════════════════════════════════════════════════
   if (step === 'rate') {
     const player = players[currentPlayerIdx];
-    if (!player) { setStep('share'); return null; }
+    if (!player) return null;
     const pr = calcRating(player);
     const pColor = ratingColor(pr);
 

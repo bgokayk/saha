@@ -82,7 +82,7 @@ export default function ChatListScreen({ navigation }) {
       ) : tab === 'direct' ? (
         <ScrollView showsVerticalScrollIndicator={false}>
           {convos.length === 0 ? (
-            <EmptyChat label="Henüz direkt mesajın yok" sub="Oyuncu keşfet ve konuşma başlat!" />
+            <EmptyChat label="Henüz mesaj yok" sub="Oyuncu bul ve maça davet et!" navigation={navigation} showDiscoverBtn />
           ) : (
             convos.map((c) => (
               <TouchableOpacity key={c.otherId} style={styles.convoRow}
@@ -167,12 +167,17 @@ function MatchChatList({ navigation, myId }) {
   );
 }
 
-function EmptyChat({ label, sub }) {
+function EmptyChat({ label, sub, navigation, showDiscoverBtn }) {
   return (
     <View style={styles.emptyWrap}>
-      <Text style={{ fontSize: 44, marginBottom: 12 }}>💬</Text>
+      <Text style={{ fontSize: 64, marginBottom: 12 }}>💬</Text>
       <Text style={styles.emptyTitle}>{label}</Text>
       <Text style={styles.emptySub}>{sub}</Text>
+      {showDiscoverBtn && navigation && (
+        <TouchableOpacity style={styles.discoverBtn} onPress={() => navigation.navigate('Discover')}>
+          <Text style={styles.discoverBtnText}>Oyuncu Bul →</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -210,7 +215,9 @@ const styles = StyleSheet.create({
   formatBadge:  { backgroundColor: 'rgba(0,212,255,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   formatText:   { color: '#00D4FF', fontSize: 11, fontWeight: '600' },
 
-  emptyWrap:  { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 },
-  emptySub:   { fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
+  emptyWrap:  { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40, flex: 1, justifyContent: 'center' },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 },
+  emptySub:   { fontSize: 14, color: '#8B9BB4', textAlign: 'center' },
+  discoverBtn: { marginTop: 20, backgroundColor: 'rgba(0,212,255,0.1)', borderWidth: 1, borderColor: '#00D4FF', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20 },
+  discoverBtnText: { color: '#00D4FF', fontWeight: '700', fontSize: 14 },
 });

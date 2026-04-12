@@ -31,6 +31,7 @@ export default function SplashScreen({ navigation }) {
             resizeMode="contain"
           />
           <Text style={styles.logoBy}>by LumenCo.</Text>
+          <Text style={styles.tagline}>Halı sahanın sosyal ağı</Text>
         </Animated.View>
       </View>
 
@@ -65,6 +66,7 @@ const styles = StyleSheet.create({
   logoWrap:     { alignItems: 'center', gap: 8 },
   logoImage:    { width: 240, height: 90 },
   logoBy:       { color: '#00D4FF', fontSize: 12, letterSpacing: 4, marginTop: 12 },
+  tagline:      { color: 'rgba(255,255,255,0.25)', fontSize: 13, marginTop: 8 },
 
   bottomSection:{ gap: 12, paddingBottom: 12 },
 

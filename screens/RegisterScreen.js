@@ -13,8 +13,12 @@ export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [position, setPosition] = useState('');
+  const [expLevel, setExpLevel] = useState('');
+  const [expYears, setExpYears] = useState('');
   const [loading, setLoading] = useState(false);
   const positions = ['Kaleci', 'Defans', 'Orta Saha', 'Forvet'];
+  const EXP_LEVELS = ['Amatör', 'Okul Takımı', 'BAL', '3. Lig', '2. Lig', '1. Lig', 'Süper Lig'];
+  const EXP_YEARS = ['1 yıldan az', '1-2 yıl', '3-5 yıl', '5-10 yıl', '10+ yıl'];
 
   async function handleRegister() {
     if (!email || !password || !fullName) {
@@ -52,9 +56,12 @@ export default function RegisterScreen({ navigation }) {
           full_name: fullName,
           phone: phone || null,
           position: position || null,
+          experience_level: expLevel || 'Amatör',
+          experience_years: expYears ? parseInt(expYears) || 0 : 0,
         }, { onConflict: 'id', ignoreDuplicates: false });
 
         if (profileError) {
+          console.error('Profile upsert error:', profileError);
         }
       }
 
@@ -107,6 +114,36 @@ export default function RegisterScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </View>
+
+        <Text style={styles.label}>Futbol Geçmişi</Text>
+        <View style={styles.positionRow}>
+          {EXP_LEVELS.map(lvl => (
+            <TouchableOpacity
+              key={lvl}
+              style={[styles.posBtn, expLevel === lvl && styles.posBtnActive]}
+              onPress={() => setExpLevel(lvl)}
+            >
+              <Text style={[styles.posBtnText, expLevel === lvl && styles.posBtnTextActive]}>
+                {lvl}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Deneyim Süresi</Text>
+        <View style={styles.positionRow}>
+          {EXP_YEARS.map(yr => (
+            <TouchableOpacity
+              key={yr}
+              style={[styles.posBtn, expYears === yr && styles.posBtnActive]}
+              onPress={() => setExpYears(yr)}
+            >
+              <Text style={[styles.posBtnText, expYears === yr && styles.posBtnTextActive]}>
+                {yr}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <TouchableOpacity style={[styles.btnPrimary, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading}>
@@ -134,8 +171,8 @@ const styles = StyleSheet.create({
   title: { color: '#FFFFFF', fontSize: 28, fontWeight: '700', marginBottom: 8 },
   subtitle: { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
   form: { gap: 4, marginBottom: 28 },
-  label: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 6, marginTop: 14 },
-  input: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, color: '#FFFFFF', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  label: { color: '#00D4FF', fontSize: 13, marginBottom: 6, marginTop: 14, fontWeight: '600', letterSpacing: 1 },
+  input: { backgroundColor: '#0F1E35', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, color: '#FFFFFF', fontSize: 15, borderWidth: 1.5, borderColor: 'rgba(0,212,255,0.15)' },
   positionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   posBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.06)' },
   posBtnActive: { backgroundColor: '#00D4FF', borderColor: '#00D4FF' },

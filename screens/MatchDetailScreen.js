@@ -368,7 +368,7 @@ export default function MatchDetailScreen({ navigation, route }) {
           <View style={[styles.mainBtn, { backgroundColor: '#94A3B8' }]}>
             <ActivityIndicator color="#fff" />
           </View>
-        ) : isPast && isJoined ? (
+        ) : (match.status === 'completed' || isPast) && isJoined ? (
           <TouchableOpacity
             style={[styles.mainBtn, { backgroundColor: '#8B5CF6' }]}
             onPress={() => navigation.navigate('MatchRating', {
@@ -377,7 +377,7 @@ export default function MatchDetailScreen({ navigation, route }) {
               format: match.format,
             })}
           >
-            <Text style={styles.mainBtnText}>⭐ Değerlendir</Text>
+            <Text style={styles.mainBtnText}>⭐ Maçı Değerlendir</Text>
           </TouchableOpacity>
         ) : isJoined ? (
           <TouchableOpacity style={[styles.mainBtn, { backgroundColor: '#EF4444' }]} onPress={handleLeave}>
